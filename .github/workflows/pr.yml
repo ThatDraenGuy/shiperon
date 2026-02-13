@@ -1,0 +1,38 @@
+name: 'PR'
+on:
+  pull_request:
+    branches: [ master ]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read # We are checking Pull Requests, duh
+
+concurrency:
+  group: ${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  ci-self-check:
+    name: CI config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          persist-credentials: false
+      - name: Lint GitHub CI config with zizmor
+        uses: zizmorcore/zizmor-action@e639db99335bc9038abc0e066dfcd72e23d26fb4 # v0.3.0
+        with:
+          advanced-security: false
+          annotations: true
+          persona: pedantic
+
+  pr-check:
+    name: PR conventions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title
+        uses: deepakputhraya/action-pr-title@077bddd7bdabd0d2b1b25ed0754c7e62e184d7ee
+        with:
+          regex: 'feature|feat|fix|bugfix|build|chore|docs|hotfix|release:\W.+'
+
