@@ -1,11 +1,9 @@
 name: 'PR'
+
 on:
   pull_request:
     branches: [ master ]
     types: [opened, edited, synchronize, reopened]
-
-permissions:
-  pull-requests: read
 
 jobs:
   ci-self-check:
