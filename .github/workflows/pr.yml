@@ -5,11 +5,7 @@ on:
     types: [opened, edited, synchronize, reopened]
 
 permissions:
-  pull-requests: read # We are checking Pull Requests, duh
-
-concurrency:
-  group: ${{ github.ref_name }}
-  cancel-in-progress: true
+  pull-requests: read
 
 jobs:
   ci-self-check:
