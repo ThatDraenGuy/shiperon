@@ -1,0 +1,20 @@
+name: 'PR'
+
+on:
+  pull_request:
+    branches: [ master ]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  pr-check:
+    name: PR conventions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title
+        uses: deepakputhraya/action-pr-title@077bddd7bdabd0d2b1b25ed0754c7e62e184d7ee
+        with:
+          regex: 'feature|feat|fix|bugfix|build|chore|docs|hotfix|release:\W.+'
+
