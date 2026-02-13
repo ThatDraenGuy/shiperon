@@ -6,7 +6,10 @@ on:
     types: [opened, edited, synchronize, reopened]
 
 permissions:
-  pull-requests: read
+  actions: write
+  checks: write
+  pull-requests: write
+  contents: read
 
 jobs:
   pr-check:
