@@ -1,0 +1,15 @@
+[package]
+name = "shiperon"
+version = "0.1.0"
+edition = "2024"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+todo = "warn"
+
+[dependencies]
+
+[build-dependencies]
+rust-bison-skeleton = { version = "0.41.0" }
