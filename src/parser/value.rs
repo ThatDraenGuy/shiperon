@@ -1,17 +1,12 @@
 use crate::lexer::Token;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum ParserValue {
     None,
     Uninitialized,
+    #[default]
     Stolen,
     Token(Token),
-}
-
-impl Default for ParserValue {
-    fn default() -> Self {
-        Self::Stolen
-    }
 }
 
 impl ParserValue {
