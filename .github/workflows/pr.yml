@@ -28,6 +28,7 @@ jobs:
     - uses: dtolnay/rust-toolchain@nightly
       with:
         components: rustfmt
+    - run: cargo build
     - uses: mbrobbel/rustfmt-check@9a22c8ce35fa788e7db3bfb4c814ad1c13b4d5be # v0.20.0
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
