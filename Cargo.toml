@@ -11,5 +11,11 @@ todo = "warn"
 
 [dependencies]
 
+[dev-dependencies]
+insta = { version = "1.46.3", features = ["glob"] }
+serde = {version = "1.0.192", features = ["derive"] }
+serde_yaml = "0.9.27"
+tempfile = "3.8.1"
+
 [build-dependencies]
 rust-bison-skeleton = { version = "0.41.0" }

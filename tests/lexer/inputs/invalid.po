@@ -1,0 +1,6 @@
+class Program is
+    this() is
+        var y: Boolean(true)
+        !
+    end
+end

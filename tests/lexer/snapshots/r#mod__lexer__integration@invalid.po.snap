@@ -1,0 +1,23 @@
+---
+source: tests/lexer/mod.rs
+expression: result
+input_file: tests/lexer/inputs/invalid.po
+---
+[ (000..005)	kCLASS ]
+[ (006..013)	tIDENTIFIER Program]
+[ (014..016)	kIS ]
+[ (021..025)	kTHIS ]
+[ (025..026)	tLPAREN ]
+[ (026..027)	tRPAREN ]
+[ (028..030)	kIS ]
+[ (039..042)	kVAR ]
+[ (043..044)	tIDENTIFIER y]
+[ (044..045)	tCOLON ]
+[ (046..053)	tIDENTIFIER Boolean]
+[ (053..054)	tLPAREN ]
+[ (054..058)	tIDENTIFIER true]
+[ (058..059)	tRPAREN ]
+[ (068..069)	YYUNDEF !]
+[ (074..077)	kEND ]
+[ (078..081)	kEND ]
+[ (082..082)	EOF ]

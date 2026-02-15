@@ -1,0 +1,13 @@
+class Program is
+    this() is
+        var sum: Integer(0)
+        var limit: Integer(10)
+        var i is 0
+        while i.Less(limit) loop
+            if i.Rem(2).Equal(0) then
+                sum := sum.Plus(i)
+            end
+        end
+        return sum
+    end
+end
