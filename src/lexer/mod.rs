@@ -160,25 +160,22 @@ impl<S: ByteSource> Lexer<S> {
     }
 
     fn next_token(&mut self) -> LexResult<Token> {
-        let peek = self.peek()?;
-
-        // skip whitespace
-        if peek.is_ascii_whitespace() {
-            self.skip_while(|b| b.is_ascii_whitespace())?;
-        }
-
-        // handle comments
-        if peek == b'/' {
-            self.next()?;
+        loop {
             match self.peek()? {
+                //skip whitespace
+                b if b.is_ascii_whitespace() => self.skip_while(|b| b.is_ascii_whitespace())?,
+                //handle comments
                 b'/' => {
-                    // singleline comment, skip until line break
-                    self.skip_while(|b| b != b'\n')?;
+                    self.next()?;
+                    match self.peek_maybe()? {
+                        Some(b'/') => {
+                            // singleline comment, skip until line break
+                            self.skip_while(|b| b != b'\n')?;
+                        },
+                        _ => return Ok(self.token(TokenRegistry::YYUNDEF, vec![b'/'])),
+                    };
                 },
-                b'*' => {
-                    //TODO multiline comment, skip until `*/`
-                },
-                _ => {},
+                _ => break,
             };
         }
 
