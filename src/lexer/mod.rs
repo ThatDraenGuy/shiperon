@@ -1,7 +1,7 @@
 mod source;
 mod token;
 
-use std::{error::Error, io, path::Path};
+use std::{io, path::Path};
 
 pub use source::ByteSource;
 pub use token::Token;

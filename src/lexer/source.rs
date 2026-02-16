@@ -50,7 +50,7 @@ impl ByteSource for FileSource {
     fn peek(&mut self) -> Result<Option<u8>, &Self::Error> {
         match self.src.peek() {
             None => Ok(None),
-            Some(Ok(b)) => Ok(Some(b.clone())),
+            Some(Ok(b)) => Ok(Some(*b)),
             Some(Err(e)) => Err(e),
         }
     }
