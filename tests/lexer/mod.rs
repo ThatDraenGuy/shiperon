@@ -1,18 +1,18 @@
-use std::{error::Error, fs::read, path::Path};
+use std::{error::Error, path::Path};
 
 use insta::{assert_snapshot, glob};
-use shiperon::{Lexer, lexer::Token};
+use shiperon::{Lexer, TokenRegistry, lexer::Token};
 
 fn perform_test(input_path: &Path) -> Result<String, Box<dyn Error>> {
-    let input = read(input_path)?;
+    // let input = read(input_path)?;
 
-    let mut lexer = Lexer::new(input);
+    let mut lexer = Lexer::of_file(input_path)?;
     let mut result: Vec<Token> = Vec::new();
     loop {
         let token = lexer.yylex();
         let token_type = token.token_type;
         result.push(token);
-        if token_type == Lexer::YYEOF {
+        if token_type == TokenRegistry::YYEOF {
             break;
         }
     }

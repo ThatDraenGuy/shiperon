@@ -9,6 +9,6 @@ pub struct ParserLoc {
 
 impl Debug for ParserLoc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("{}...{}", self.begin, self.end))
+        f.write_str(&format!("{:0>3}..{:0>3}", self.begin, self.end))
     }
 }

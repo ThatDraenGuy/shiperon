@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display};
 
 use crate::{
-    Lexer,
+    TokenRegistry,
     parser::{ParserLoc, token_name},
 };
 
@@ -14,9 +14,9 @@ pub struct Token {
 
 impl Token {
     pub fn type_name(&self) -> &'static str {
-        if self.token_type == Lexer::YYUNDEF {
+        if self.token_type == TokenRegistry::YYUNDEF {
             "YYUNDEF"
-        } else if self.token_type == Lexer::YYerror {
+        } else if self.token_type == TokenRegistry::YYerror {
             "YYerror"
         } else {
             token_name(self.token_type)
@@ -27,9 +27,8 @@ impl Token {
 impl Debug for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format!(
-            "[ ({:0>3}..{:0>3})\t{} {}]",
-            self.loc.begin,
-            self.loc.end,
+            "[ ({:?})\t{} {}]",
+            self.loc,
             self.type_name(),
             str::from_utf8(&self.token_value).unwrap_or("invalid value"),
         ))
