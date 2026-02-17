@@ -2,11 +2,8 @@ use std::{error::Error, fs, path::Path};
 
 fn patch_bison_output(target: &Path) -> Result<(), Box<dyn Error>> {
     let contents = fs::read_to_string(target)?;
-    // let replaced = contents
-    //     .replace("yylexer: Lexer", "yylexer: Lexer<T>")
-    //     .replace("impl Lexer", "impl<T> Lexer<T>");
     let replaced = contents
-        .replace("impl<T: ByteSource> Parser<T: ByteSource>", "impl<T: ByteSource> Parser<T>");
+        .replace("impl<S: ByteSource> Parser<S: ByteSource>", "impl<S: ByteSource> Parser<S>");
     fs::write(target, replaced)?;
     Ok(())
 }

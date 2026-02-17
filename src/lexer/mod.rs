@@ -78,15 +78,24 @@ impl<S: ByteSource> Lexer<S> {
         Ok(())
     }
 
-    fn take_while(&mut self, pred: impl Fn(u8) -> bool) -> LexResult<Vec<u8>> {
-        let mut buf = vec![];
+    fn take_into_while(
+        &mut self,
+        target: &mut Vec<u8>,
+        pred: impl Fn(u8) -> bool,
+    ) -> LexResult<()> {
         while let Some(b) = self.peek_maybe()? {
             if !pred(b) {
                 break;
             }
-            buf.push(b);
+            target.push(b);
             self.next_maybe()?;
         }
+        Ok(())
+    }
+
+    fn take_while(&mut self, pred: impl Fn(u8) -> bool) -> LexResult<Vec<u8>> {
+        let mut buf = vec![];
+        self.take_into_while(&mut buf, pred)?;
         Ok(buf)
     }
 
@@ -141,22 +150,36 @@ impl<S: ByteSource> Lexer<S> {
     }
 
     fn read_numeric(&mut self) -> LexResult<Token> {
-        let negated = if self.peek()? == b'-' {
-            self.next_maybe()?;
-            true
-        } else {
-            false
+        let mut bytes = vec![];
+        if self.peek()? == b'-' {
+            bytes.push(self.next()?);
         };
 
-        let bytes = self.take_while(|b| b.is_ascii_digit())?;
-        str::from_utf8(&bytes)
-            .map_err(|_e| self.make_err("Invalid UTF-8 encountered".to_owned().into_bytes()))?
-            .parse::<u32>()
-            .map_err(|_e| self.make_err("Invalid num encountered".to_owned().into_bytes()))?; //TODO smarter
-        let mut value = if negated { vec![b'-'] } else { vec![] };
-        value.extend_from_slice(&bytes);
-        Ok(self.token(TokenRegistry::tINTEGER, value))
-        //TODO floats
+        self.take_into_while(&mut bytes, |b| b.is_ascii_digit())?;
+
+        //TODO long ints & floats??
+        if let Some(b'.') = self.peek_maybe()? {
+            //floats
+            bytes.push(self.next()?);
+            if !self.peek_maybe()?.is_some_and(|b| b.is_ascii_digit()) {
+                return Ok(self.token(TokenRegistry::YYUNDEF, bytes));
+            }
+            self.take_into_while(&mut bytes, |b| b.is_ascii_digit())?;
+            //sanity check
+            str::from_utf8(&bytes)
+                .map_err(|_e| self.make_err("Invalid UTF-8 encountered".to_owned().into_bytes()))?
+                .parse::<f32>()
+                .map_err(|_e| self.make_err("Invalid num encountered".to_owned().into_bytes()))?; //TODO smarter
+            Ok(self.token(TokenRegistry::tFLOAT, bytes))
+        } else {
+            //ints
+            //sanity check
+            str::from_utf8(&bytes)
+                .map_err(|_e| self.make_err("Invalid UTF-8 encountered".to_owned().into_bytes()))?
+                .parse::<u32>()
+                .map_err(|_e| self.make_err("Invalid num encountered".to_owned().into_bytes()))?; //TODO smarter
+            Ok(self.token(TokenRegistry::tINTEGER, bytes))
+        }
     }
 
     fn next_token(&mut self) -> LexResult<Token> {
