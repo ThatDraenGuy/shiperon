@@ -1,0 +1,33 @@
+class Animal is
+    this() is
+    end
+    method LimbsNum(): Integer => 0
+end
+
+class Dog extends Animal is
+    this() is
+        super() // not in spec, under question
+    end
+    method LimbsNum(): Integer => 4
+end
+
+class Spider extends Animal is
+    this() is
+        super() // not in spec, under question
+    end
+    method LimbsNum(): Integer => 8
+end
+
+class Main is
+    // true -> 4
+    // false -> 8
+    this(isDog: Boolean): Integer is
+        var animal: Animal()
+        if isDog then
+            animal := Dog()
+        else
+            animal := Spider()
+        end
+        return animal.LimbsNum()
+    end
+end
