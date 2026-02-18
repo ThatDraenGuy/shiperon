@@ -1,0 +1,13 @@
+---
+source: tests/lexer/mod.rs
+expression: result
+input_file: tests/lexer/inputs/nums.po
+---
+[ (000..002)	tINTEGER 12]
+[ (003..007)	tINTEGER 1531]
+[ (008..014)	tFLOAT 25.643]
+[ (015..018)	YYUNDEF 25.]
+[ (019..021)	tINTEGER 12]
+[ (021..022)	tCOMMA ]
+[ (022..023)	tINTEGER 0]
+[ (023..023)	EOF ]

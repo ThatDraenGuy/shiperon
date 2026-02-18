@@ -25,12 +25,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-    - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # v1.93.1
+    - uses: dtolnay/rust-toolchain@nightly
       with:
         components: rustfmt
+    - run: cargo build
     - uses: mbrobbel/rustfmt-check@9a22c8ce35fa788e7db3bfb4c814ad1c13b4d5be # v0.20.0
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        mode: review
 
   lint:
     runs-on: ubuntu-latest
