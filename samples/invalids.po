@@ -11,6 +11,17 @@ class NotDerived is
 end
 
 class Program is
+    method IncorrectReturn(): Boolean => 1
+    method IncorrectReturn2(): Integer is
+        return true
+    end
+    method IncorrectReturn3() is
+        return 1.0
+    end
+    method IncorrectReturn4(): real is
+        return
+    end
+
     method IntOnly(num: Integer) is
     end
 
