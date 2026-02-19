@@ -4,7 +4,7 @@ class Shape is
     method area(): Real => 0.0
 end
 
-class Square is
+class Square extends Shape is
     var side: Real(0.0)
 
     this(side: Real) is
@@ -15,7 +15,7 @@ class Square is
     method area(): Real => side.Mult(side) // object passed into its own method
 end
 
-class Rectangle is
+class Rectangle extends Shape is
     var a: Real(0.0)
     var b: Real(0.0)
 
@@ -33,7 +33,7 @@ class Math is
     var PI: 3.1415
 end
 
-class Circle is
+class Circle extends Shape is
     var r: Real(0.0)
 
     this(r: Real) is
