@@ -1,0 +1,17 @@
+class Parent is
+    var value: Integer(1)
+
+    this() is
+        this.value := 2
+    end
+end
+
+class Child extends Parent is
+end
+
+class Program is
+    this() is
+        var item: Child()
+        return item.value // 1 or 2???
+    end
+end

@@ -1,0 +1,7 @@
+class Program is
+    this(x: Integer): Integer is
+        var y := 3
+        var z := Integer(5)
+        return x.Mult(y).Minus(z)
+    end
+end

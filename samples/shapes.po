@@ -1,0 +1,61 @@
+class Shape is
+    this() is
+    end
+    method area(): Real => 0.0
+end
+
+class Square extends Shape is
+    var side: Real(0.0)
+
+    this(side: Real) is
+        super() // not in spec, under question
+        this.side := side // differentiating between variables with same name
+    end
+
+    method area(): Real => side.Mult(side) // object passed into its own method
+end
+
+class Rectangle extends Shape is
+    var a: Real(0.0)
+    var b: Real(0.0)
+
+    this(a: Real, b: Real) is
+        super() // not in spec, under question
+        this.a := a
+        this.b := b
+    end
+
+    method area(): Real => a.Mult(b)
+end
+
+// no clearly defined constructor
+class Math is
+    var PI: 3.1415
+end
+
+class Circle extends Shape is
+    var r: Real(0.0)
+
+    this(r: Real) is
+        super() // not in spec, under question
+        this.r := r
+    end
+
+    method area(): Real => Math().PI.Mult(r).Mult(r)
+end
+
+class Program is
+    this(type: Integer, a: Real, b: Real) is
+        var shape : Shape()
+        if type.Equal(1) then
+            shape := Square(a)
+        end
+        if type.Equal(2) then
+            shape := Rectangle(a, b)
+        end
+        if type.Equal(3) then
+            shape := Circle(a)
+        end
+        return shape.area()
+    end
+end
