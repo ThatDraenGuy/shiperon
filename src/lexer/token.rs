@@ -5,6 +5,8 @@ use crate::{
     parser::{ParserLoc, token_name},
 };
 
+pub type TokenType = i32;
+
 #[derive(Clone)]
 pub enum TokenValue {
     None,
@@ -32,7 +34,7 @@ impl Display for TokenValue {
 
 #[derive(Clone)]
 pub struct Token {
-    pub token_type: i32,
+    pub token_type: TokenType,
     pub token_value: TokenValue,
     pub loc: ParserLoc,
 }

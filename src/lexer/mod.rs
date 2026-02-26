@@ -4,14 +4,12 @@ mod token;
 use std::{io, path::Path};
 
 pub use source::ByteSource;
-pub use token::{Token, TokenValue};
+pub use token::{Token, TokenType, TokenValue};
 
 use crate::{
     lexer::source::{FileSource, StrSource},
     parser::ParserLoc,
 };
-
-type TokenType = i32;
 
 #[derive(Debug)]
 pub struct TokenRegistry;
