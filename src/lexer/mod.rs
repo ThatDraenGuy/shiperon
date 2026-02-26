@@ -201,8 +201,10 @@ impl<S: ByteSource> Lexer<S> {
                             self.skip_while(|b| b != b'\n')?;
                         },
                         _ => {
-                            return Ok(self
-                                .token(TokenRegistry::YYUNDEF, TokenValue::String("/".to_owned())));
+                            return Ok(self.token(
+                                TokenRegistry::YYUNDEF,
+                                TokenValue::String("/".to_owned()),
+                            ));
                         },
                     };
                 },
