@@ -1,0 +1,74 @@
+class Quadrant is
+    var xMul: Real(1.0)
+    var yMul: Real(1.0)
+
+    this(xMul: Real, yMul: Real) is
+        this.xMul := xMul
+        this.yMul := yMul
+    end
+
+    method Sign(num: Real): Boolean => num.GreaterOrEqual(0)
+    method Abs(num: Real): Real is
+        if (Sign(num)) then
+            return num
+        end
+        return num.UnaryMinus()
+    end
+
+    method Rx(r: Real): Real => r.Mult(Abs(xMul))
+    method Ry(r: Real): Real => r.Mult(Abs(yMul))
+
+    method CheckSign(x: Real, y: Real): Boolean is
+        var xCheck := Sign(x).Equals(Sign(xMul)).Or(x.Equals(0))
+        var yCheck := Sign(y).Equals(Sign(yMul)).Or(y.Equals(0))
+        return xCheck.And(yCheck)
+    end
+
+    method CalcHit(x: Real, y: Real, r: Real): Boolean => false
+    method CheckHit(x: Real, y: Real, r: Real): Boolean => is
+        if (CheckSign(x, y)) then
+            return CalcHit(x, y, r)
+        end
+        return false
+    end
+end
+
+class RectQuadrant extends Quadrant is
+    this(xMul: Real, yMul: Real) is
+        this.xMul := xMul
+        this.yMul := yMul
+    end
+
+    method CalcHit(x: Real, y: Real, r: Real): Boolean is
+        return Abs(x).LessOrEqual(Rx(r)).And(Abs(y).LessOrEqual(Ry(r)))
+    end
+end
+
+class CircleQuadrant extends Quadrant is
+    this(xMul: Real, yMul: Real) is
+        this.xMul := xMul
+        this.yMul := yMul
+    end
+
+    method CalcHit(x: Real, y: Real, r: Real): Boolean is
+        return x.Mult(x).Plus(y.Mult(y)).LessOrEqual(Rx(r).Mult(Rx(r)))
+    end
+end
+
+class HitChecker is
+    this(x: Real, y: Real, r: Real): Boolean is
+        var quadrants : QuadrantArray(4)
+        quadrants.set(0, RectQuadrant(1.0, 2.0))
+        quadrants.set(1, RectQuadrant(-2.0, 0.5))
+        quadrants.set(2, CircleQuadrant(-1.0, -1.0))
+        quadrants.set(3, CircleQuadrant(1.0, -1.0))
+
+        var i := 0
+        while i.Less(4) loop
+            if (quadrants.get(i).CheckHit(x, y, r)) then
+                return true
+            end
+        end
+        return false
+    end
+end

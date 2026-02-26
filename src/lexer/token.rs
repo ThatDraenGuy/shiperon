@@ -6,9 +6,34 @@ use crate::{
 };
 
 #[derive(Clone)]
+pub enum TokenValue {
+    None,
+    Int(i32),
+    Float(f32),
+    String(String),
+}
+
+impl Debug for TokenValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => write!(f, ""),
+            Self::Int(i) => f.write_str(&format!("{i}")),
+            Self::Float(fl) => f.write_str(&format!("{fl}")),
+            Self::String(s) => f.write_str(s),
+        }
+    }
+}
+
+impl Display for TokenValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("{self:?}"))
+    }
+}
+
+#[derive(Clone)]
 pub struct Token {
     pub token_type: i32,
-    pub token_value: Vec<u8>,
+    pub token_value: TokenValue,
     pub loc: ParserLoc,
 }
 
@@ -26,12 +51,7 @@ impl Token {
 
 impl Debug for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!(
-            "[ ({:?})\t{} {}]",
-            self.loc,
-            self.type_name(),
-            str::from_utf8(&self.token_value).unwrap_or("invalid value"),
-        ))
+        f.write_str(&format!("[ ({:?})\t{} {}]", self.loc, self.type_name(), self.token_value))
     }
 }
 

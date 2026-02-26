@@ -4,7 +4,7 @@ mod token;
 use std::{io, path::Path};
 
 pub use source::ByteSource;
-pub use token::Token;
+pub use token::{Token, TokenValue};
 
 use crate::{
     lexer::source::{FileSource, StrSource},
@@ -31,9 +31,9 @@ impl<S: ByteSource> Lexer<S> {
     }
 
     fn empty_token(&self, token_type: TokenType) -> Token {
-        Token { token_type, token_value: vec![], loc: self.get_loc() }
+        Token { token_type, token_value: TokenValue::None, loc: self.get_loc() }
     }
-    fn token(&self, token_type: TokenType, token_value: Vec<u8>) -> Token {
+    fn token(&self, token_type: TokenType, token_value: TokenValue) -> Token {
         Token { token_type, token_value, loc: self.get_loc() }
     }
     fn make_eof_if_none<T>(&mut self, value: Option<T>) -> Result<T, Token> {
@@ -42,12 +42,15 @@ impl<S: ByteSource> Lexer<S> {
             self.empty_token(TokenRegistry::YYEOF)
         })
     }
-    fn make_err(&self, data: Vec<u8>) -> Token {
-        self.token(TokenRegistry::YYerror, data)
+    fn make_err<T>(&self, data: T) -> Token
+    where
+        T: Into<String>,
+    {
+        self.token(TokenRegistry::YYerror, TokenValue::String(data.into()))
     }
 
     fn peek_maybe(&mut self) -> LexResult<Option<u8>> {
-        self.src.peek().map_err(|e| S::report_error(e).into_bytes()).map_err(|e| self.make_err(e))
+        self.src.peek().map_err(|e| S::report_error(e)).map_err(|e| self.make_err(e))
     }
     fn peek(&mut self) -> LexResult<u8> {
         self.peek_maybe().and_then(|maybe_b| self.make_eof_if_none(maybe_b))
@@ -55,7 +58,7 @@ impl<S: ByteSource> Lexer<S> {
 
     fn next_maybe(&mut self) -> LexResult<Option<u8>> {
         self.pos += 1;
-        self.src.next().map_err(|e| self.make_err(S::report_error(&e).into_bytes()))
+        self.src.next().map_err(|e| self.make_err(S::report_error(&e)))
     }
     fn next(&mut self) -> LexResult<u8> {
         self.next_maybe().and_then(|maybe_b| self.make_eof_if_none(maybe_b))
@@ -118,35 +121,33 @@ impl<S: ByteSource> Lexer<S> {
                     self.next_maybe()?;
                     self.empty_token(TokenRegistry::tARROW)
                 } else {
-                    self.token(TokenRegistry::YYUNDEF, vec![b'='])
+                    self.token(TokenRegistry::YYUNDEF, TokenValue::String("=".to_owned()))
                 }
             },
-            b => self.token(TokenRegistry::YYUNDEF, vec![b]),
+            b => self.token(TokenRegistry::YYUNDEF, TokenValue::String((b as char).to_string())),
         })
     }
 
     fn read_keyword_or_id(&mut self) -> LexResult<Token> {
         let bytes = self.take_while(|b| b.is_ascii_alphanumeric())?;
-        Ok(
-            match str::from_utf8(&bytes)
-                .map_err(|_e| self.make_err("Invalid UTF-8 encountered".to_owned().into_bytes()))?
-            {
-                "class" => self.empty_token(TokenRegistry::kCLASS),
-                "extends" => self.empty_token(TokenRegistry::kEXTENDS),
-                "is" => self.empty_token(TokenRegistry::kIS),
-                "end" => self.empty_token(TokenRegistry::kEND),
-                "var" => self.empty_token(TokenRegistry::kVAR),
-                "method" => self.empty_token(TokenRegistry::kMETHOD),
-                "this" => self.empty_token(TokenRegistry::kTHIS),
-                "while" => self.empty_token(TokenRegistry::kWHILE),
-                "loop" => self.empty_token(TokenRegistry::kLOOP),
-                "if" => self.empty_token(TokenRegistry::kIF),
-                "then" => self.empty_token(TokenRegistry::kTHEN),
-                "else" => self.empty_token(TokenRegistry::kELSE),
-                "return" => self.empty_token(TokenRegistry::kRETURN),
-                _ => self.token(TokenRegistry::tIDENTIFIER, bytes),
-            },
-        )
+        let string =
+            String::from_utf8(bytes).map_err(|_e| self.make_err("Invalid UTF-8 encountered"))?;
+        Ok(match string.as_str() {
+            "class" => self.empty_token(TokenRegistry::kCLASS),
+            "extends" => self.empty_token(TokenRegistry::kEXTENDS),
+            "is" => self.empty_token(TokenRegistry::kIS),
+            "end" => self.empty_token(TokenRegistry::kEND),
+            "var" => self.empty_token(TokenRegistry::kVAR),
+            "method" => self.empty_token(TokenRegistry::kMETHOD),
+            "this" => self.empty_token(TokenRegistry::kTHIS),
+            "while" => self.empty_token(TokenRegistry::kWHILE),
+            "loop" => self.empty_token(TokenRegistry::kLOOP),
+            "if" => self.empty_token(TokenRegistry::kIF),
+            "then" => self.empty_token(TokenRegistry::kTHEN),
+            "else" => self.empty_token(TokenRegistry::kELSE),
+            "return" => self.empty_token(TokenRegistry::kRETURN),
+            _ => self.token(TokenRegistry::tIDENTIFIER, TokenValue::String(string)),
+        })
     }
 
     fn read_numeric(&mut self) -> LexResult<Token> {
@@ -162,23 +163,27 @@ impl<S: ByteSource> Lexer<S> {
             //floats
             bytes.push(self.next()?);
             if !self.peek_maybe()?.is_some_and(|b| b.is_ascii_digit()) {
-                return Ok(self.token(TokenRegistry::YYUNDEF, bytes));
+                return Ok(self.token(
+                    TokenRegistry::YYUNDEF,
+                    TokenValue::String(
+                        String::from_utf8(bytes)
+                            .map_err(|_e| self.make_err("Invalid UTF-8 encountered"))?,
+                    ),
+                ));
             }
             self.take_into_while(&mut bytes, |b| b.is_ascii_digit())?;
-            //sanity check
-            str::from_utf8(&bytes)
-                .map_err(|_e| self.make_err("Invalid UTF-8 encountered".to_owned().into_bytes()))?
+            let fl = str::from_utf8(&bytes)
+                .map_err(|_e| self.make_err("Invalid UTF-8 encountered"))?
                 .parse::<f32>()
-                .map_err(|_e| self.make_err("Invalid num encountered".to_owned().into_bytes()))?; //TODO smarter
-            Ok(self.token(TokenRegistry::tFLOAT, bytes))
+                .map_err(|_e| self.make_err("Invalid num encountered"))?; //TODO smarter
+            Ok(self.token(TokenRegistry::tFLOAT, TokenValue::Float(fl)))
         } else {
             //ints
-            //sanity check
-            str::from_utf8(&bytes)
-                .map_err(|_e| self.make_err("Invalid UTF-8 encountered".to_owned().into_bytes()))?
-                .parse::<u32>()
-                .map_err(|_e| self.make_err("Invalid num encountered".to_owned().into_bytes()))?; //TODO smarter
-            Ok(self.token(TokenRegistry::tINTEGER, bytes))
+            let i = str::from_utf8(&bytes)
+                .map_err(|_e| self.make_err("Invalid UTF-8 encountered"))?
+                .parse::<i32>()
+                .map_err(|_e| self.make_err("Invalid num encountered"))?; //TODO smarter
+            Ok(self.token(TokenRegistry::tINTEGER, TokenValue::Int(i)))
         }
     }
 
@@ -195,7 +200,10 @@ impl<S: ByteSource> Lexer<S> {
                             // singleline comment, skip until line break
                             self.skip_while(|b| b != b'\n')?;
                         },
-                        _ => return Ok(self.token(TokenRegistry::YYUNDEF, vec![b'/'])),
+                        _ => {
+                            return Ok(self
+                                .token(TokenRegistry::YYUNDEF, TokenValue::String("/".to_owned())));
+                        },
                     };
                 },
                 _ => break,
