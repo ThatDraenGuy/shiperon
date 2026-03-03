@@ -9,19 +9,28 @@ pub enum ParserValue {
     Token(Token),
 }
 
+impl Token {
+    pub fn from(value: ParserValue) -> Token {
+        match value {
+            ParserValue::Token(t) => t,
+            other => unreachable!("expected Token, got {:?}", other),
+        }
+    }
+}
+
 impl ParserValue {
     /// Required method, parser expects it to be defined.
     ///
     /// Constructor for `Value::Token(token)` variant.
-    pub(crate) fn from_token(value: Token) -> Self {
+    pub fn from_token(value: Token) -> Self {
         Self::Token(value)
     }
 
-    pub(crate) fn new_uninitialized() -> Self {
+    pub fn new_uninitialized() -> Self {
         Self::Uninitialized
     }
 
-    pub(crate) fn is_uninitialized(&self) -> bool {
+    pub fn is_uninitialized(&self) -> bool {
         matches!(self, Self::Uninitialized)
     }
 }
