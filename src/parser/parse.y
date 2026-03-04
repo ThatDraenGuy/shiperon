@@ -14,6 +14,7 @@ use crate::lexer::Token;
 use crate::lexer::ByteSource;
 use crate::parser::ParserLoc as Loc;
 use crate::parser::ParserValue as Value;
+use crate::ast::*;
 }
 
 %code parser_fields {
@@ -62,9 +63,9 @@ use crate::parser::ParserValue as Value;
     constructor_def
     method_def method_decl method_body method_id params param_array param
     body body_members body_member
-    param_id type_id expr stmt
+    param_id type_id expr stmt constructor_call member_access
     assign_stmt while_stmt if_stmt return_stmt
-    args args_array
+    args args_array primary
 
 %%
     program:
@@ -200,21 +201,21 @@ use crate::parser::ParserValue as Value;
         constructor_call {
 
         } | member_access {
-
+            $$ = $1;
         } | method_call {
 
         } | primary {
-
+            $$ = Value::new_expr_primary($<ShipPrimary>1);
         }
 
     constructor_call:
         class_id args {
-
+            $$ = Value::new_expr_constructor_call($<Token>1, $<Args>2);
         }
 
     member_access:
         expr tDOT var_id {
-            
+            $$ = Value::new_expr_member_access($<ShipExpression>1, $<Token>2);
         }
 
     method_call:
@@ -224,11 +225,11 @@ use crate::parser::ParserValue as Value;
 
     primary:
         tINTEGER {
-
+            $$ = Value::new_primary_int($<Token>1);
         } | tFLOAT {
-
-        } kTHIS {
-
+            $$ = Value::new_primary_float($<Token>1);
+        } | kTHIS {
+            $$ = Value::new_primary_this();
         }
 
     args:
@@ -240,7 +241,8 @@ use crate::parser::ParserValue as Value;
 
     args_array:
         expr {
-
+            $$ = Value::new_args();
+            
         } | args_array tCOMMA expr {
 
         }
