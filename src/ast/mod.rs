@@ -1,67 +1,75 @@
-type ShipId = String;
+use serde::Serialize;
 
-#[derive(Debug, Clone)]
-pub struct Program {
-    members: Vec<ShipClassDefinition>,
+pub type ShipId = String;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ShipProgram {
+    pub classes: Vec<ShipClassDefinition>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ShipClassDefinition {
-    id: ShipId,
-    parent: Option<ShipId>,
-    members: Vec<ShipClassMember>,
+    pub class_id: ShipId,
+    pub parent_id: Option<ShipId>,
+    pub members: Vec<ShipClassMember>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ShipClassMember {
     VarDef(ShipVarDefinition),
     MethodDef(ShipMethodDefinition),
     ConstructorDef(ShipConstructorDefinition),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ShipMethodDefinition {
-    id: ShipId,
-    params: Vec<ShipParam>,
-    return_type: Option<ShipId>,
-    body: Option<ShipMethodBody>,
+    pub method_id: ShipId,
+    pub params: Vec<ShipParam>,
+    pub return_type: Option<ShipId>,
+    pub body: Option<Box<ShipMethodBody>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ShipParam {
-    name: ShipId,
-    var_type: ShipId,
+    pub name: ShipId,
+    pub var_type: ShipId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ShipMethodBody {
     Body(Box<ShipBody>),
     Expr(Box<ShipExpression>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ShipConstructorDefinition {
-    params: Vec<ShipParam>,
-    body: Box<ShipBody>,
+    pub params: Vec<ShipParam>,
+    pub body: Box<ShipBody>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ShipVarDefinition {
-    id: ShipId,
-    expr: Box<ShipExpression>,
+    pub var_id: ShipId,
+    pub expr: Box<ShipExpression>,
 }
 
-type ShipBody = Vec<ShipBodyMember>;
+#[derive(Debug, Clone, Serialize)]
+pub struct ShipBody {
+    pub members: Vec<ShipBodyMember>,
+}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ShipBodyMember {
     VarDef(Box<ShipVarDefinition>),
     Stmt(Box<ShipStatement>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ShipStatement {
-    Assign,
+    Assign {
+        target: Box<ShipExpression>,
+        value: Box<ShipExpression>,
+    },
     While {
         condition: Box<ShipExpression>,
         body: Box<ShipBody>,
@@ -76,17 +84,18 @@ pub enum ShipStatement {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ShipExpression {
     ConstructorCall { class_id: ShipId, args: Vec<ShipExpression> },
-    MemberAccess { object: Box<ShipExpression>, member_id: ShipId },
-    MethodCall { method: Box<ShipExpression>, args: Vec<ShipExpression> },
+    MemberAccess { expr: Box<ShipExpression>, member_id: ShipId },
+    MethodCall { expr: Box<ShipExpression>, args: Vec<ShipExpression> },
     Primary(ShipPrimary),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum ShipPrimary {
     Int(i32),
     Float(f32),
     This,
+    Id(ShipId),
 }
