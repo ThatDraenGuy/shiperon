@@ -1,31 +1,32 @@
-mod source;
+// mod source;
 mod token;
 
-use std::{io, path::Path};
-
-pub use source::ByteSource;
+// pub use source::ByteSourceIter;
 pub use token::{Token, TokenType, TokenValue};
 
 use crate::{
-    lexer::source::{FileSource, StrSource},
+    // lexer::source::{FileSource, StrSource},
     parser::ParserLoc,
+    source::{ByteSource, ByteSourceIter, StrSource},
 };
 
 #[derive(Debug)]
 pub struct TokenRegistry;
 
 #[derive(Debug)]
-pub struct Lexer<T: ByteSource> {
-    src: T,
+pub struct Lexer<'src, S: ByteSource<'src>> {
+    pub src: S,
+    iter: <S as ByteSource<'src>>::Iter,
     pos: usize,
     loc: usize,
 }
 
 type LexResult<T> = Result<T, Token>; // errors have to be serialized into token value anyway, might as well do it immediately
 
-impl<S: ByteSource> Lexer<S> {
+impl<'src, S: ByteSource<'src>> Lexer<'src, S> {
     pub fn new(src: S) -> Self {
-        Self { src, pos: 0, loc: 0 }
+        let iter = src.iter();
+        Self { src, iter, pos: 0, loc: 0 }
     }
 
     fn empty_token(&self, token_type: TokenType) -> Token {
@@ -48,7 +49,7 @@ impl<S: ByteSource> Lexer<S> {
     }
 
     fn peek_maybe(&mut self) -> LexResult<Option<u8>> {
-        self.src.peek().map_err(|e| S::report_error(e)).map_err(|e| self.make_err(e))
+        self.iter.peek().map_err(|e| S::Iter::report_error(e)).map_err(|e| self.make_err(e))
     }
     fn peek(&mut self) -> LexResult<u8> {
         self.peek_maybe().and_then(|maybe_b| self.make_eof_if_none(maybe_b))
@@ -56,7 +57,7 @@ impl<S: ByteSource> Lexer<S> {
 
     fn next_maybe(&mut self) -> LexResult<Option<u8>> {
         self.pos += 1;
-        self.src.next().map_err(|e| self.make_err(S::report_error(&e)))
+        self.iter.next().map_err(|e| self.make_err(S::Iter::report_error(&e)))
     }
     fn next(&mut self) -> LexResult<u8> {
         self.next_maybe().and_then(|maybe_b| self.make_eof_if_none(maybe_b))
@@ -224,17 +225,8 @@ impl<S: ByteSource> Lexer<S> {
     }
 }
 
-impl Lexer<FileSource> {
-    pub fn of_file<P>(path: P) -> Result<Self, io::Error>
-    where
-        P: AsRef<Path>,
-    {
-        Ok(Self::new(FileSource::new(path)?))
-    }
-}
-
-impl<'a> Lexer<StrSource<'a>> {
-    pub fn of_str(str: &'a str) -> Self {
+impl<'src> Lexer<'src, StrSource<'src>> {
+    pub fn of_str(str: &'src str) -> Self {
         Self::new(StrSource::new(str))
     }
 }
