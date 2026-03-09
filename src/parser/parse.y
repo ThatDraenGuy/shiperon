@@ -8,20 +8,20 @@
 %define parse.error custom
 
 %code use {
+use std::rc::Rc;
 // dark evil double lexer reacharound combo
 use crate::Lexer as AppLexer;
 use crate::TokenRegistry as Lexer;
 use crate::lexer::Token;
 use crate::ByteSource;
-use crate::parser::ParserLoc as Loc;
-use crate::parser::{value::*, ParserValue as Value};
+use crate::parser::{WithParserLoc, value::*, ParserLoc as Loc, ParserValue as Value};
 use crate::ast::*;
 }
 
 %code parser_fields {
     lexer: AppLexer<'src /* 'fix quotes */, S>,
     debug: bool,
-    pub result: Option<ShipProgram<'src /* 'fix quotes */>>,
+    pub result: Option<Rc<ShipProgram<'src /* 'fix quotes */>>>,
 }
 
 %code {
@@ -61,7 +61,7 @@ use crate::ast::*;
     tDOT        "."
 
 %type <node> program
-    class_defs class_def class_id maybe_class_members class_members class_member
+    maybe_class_defs class_defs class_def class_id maybe_class_members class_members class_member
     var_def var_id
     constructor_def
     method_def method_decl method_body method_id params maybe_param_array param_array param
@@ -73,175 +73,234 @@ use crate::ast::*;
 
 %%
     program:
-        class_defs {
-            // let program = Value::new_program($<ClassDefs>1);
-            // self.result = Some(ShipProgram::from(program));
-            // $$ = Value::None;
+        maybe_class_defs {
+            let classes = $<ClassDefsBuilder>1;
+            let loc = match (classes.first(), classes.last()) {
+                (None, None) => Loc{ begin: 0, end: 0 },
+                (Some(first), _) => first.loc(),
+                (Some(first), Some(last)) => Loc::merge_from(first.as_ref(), last.as_ref()),
+                (_, _) => unreachable!("literally how"),
+            };
+            let program = Value::new_program(self.src(), loc, classes);
+            self.result = Some(ShipProgram::from(program));
+            $$ = Value::None;
+        }
+
+    maybe_class_defs:
+        %empty {
+            $$ = Value::new_class_defs_builder(vec![]);
+        } | class_defs {
+            $$ = $1;
         }
 
     class_defs:
         class_def {
-            // $$ = Value::new_class_defs(vec![$<ShipClassDefinition>1]);
+            $$ = Value::new_class_defs_builder(vec![$<ShipClassDef>1]);
         } | class_defs class_def {
-            // let mut classes = $<ClassDefs>1;
-            // classes.push($<ShipClassDefinition>2);
-            // $$ = Value::new_class_defs(classes);
+            let mut classes = $<ClassDefsBuilder>1;
+            classes.push($<ShipClassDef>2);
+            $$ = Value::new_class_defs_builder(classes);
         }
 
     class_def:
         kCLASS class_id kIS maybe_class_members kEND {
-            // $$ = Value::new_class_def($<Id>2, Option::None, $<ClassMembers>4);
+            let kclass = $<Token>1;
+            let kend = $<Token>5;
+
+            let loc = Loc::merge_from(&kclass, &kend);
+            $$ = Value::new_class_def(self.src(), loc, $<ShipId>2, Option::None, $<ClassMembersBuilder>4);
         } | kCLASS class_id kEXTENDS class_id kIS maybe_class_members kEND {
-            // $$ = Value::new_class_def($<Id>2, Option::Some($<Id>4), $<ClassMembers>6);
+            let kclass = $<Token>1;
+            let kend = $<Token>7;
+
+            let loc = Loc::merge_from(&kclass, &kend);
+            $$ = Value::new_class_def(self.src(), loc, $<ShipId>2, Option::Some($<ShipId>4), $<ClassMembersBuilder>4);
         }
 
     class_id:
         general_id {
-            // $$ = $1;
+            $$ = $1;
         } //TODO generics??
 
     maybe_class_members:
         %empty {
-            // $$ = Value::new_class_members(vec![]);
+            $$ = Value::new_class_members_builder(vec![]);
         } | class_members {
-            // $$ = $1;
+            $$ = $1;
         }
 
     class_members:
         class_member {
-            // $$ = Value::new_class_members(vec![$<ShipClassMember>1]);
+            $$ = Value::new_class_members_builder(vec![$<ShipClassMemberAll>1]);
         } | class_members class_member {
-            // let mut members = $<ClassMembers>1;
-            // members.push($<ShipClassMember>2);
-            // $$ = Value::new_class_members(members);
+            let mut members = $<ClassMembersBuilder>1;
+            members.push($<ShipClassMemberAll>2);
+            $$ = Value::new_class_members_builder(members);
         }
 
     class_member:
         var_def {
-            // $$ = Value::new_class_member_var_def($<ShipVarDefinition>1);
+            $$ = Value::new_class_member(self.src(), ShipClassMemberAll::VarDef($<ShipVarDef>1));
         } | method_def {
-            // $$ = Value::new_class_member_method_def($<ShipMethodDefinition>1);
+            $$ = Value::new_class_member(self.src(), ShipClassMemberAll::MethodDef($<ShipMethodDef>1));
         } | constructor_def {
-            // $$ = Value::new_class_member_constructor_def($<ShipConstructorDefinition>1);
+            $$ = Value::new_class_member(self.src(), ShipClassMemberAll::ConsDef($<ShipConsDef>1));
         }
 
     var_def:
         kVAR var_id tCOLON expr {
-            // $$ = Value::new_var_def($<Id>2, $<ShipExpression>4);
+            let kvar = $<Token>1;
+            let expr = $<ShipExprAll>4;
+            let loc = Loc::merge_from(&kvar, &expr);
+            $$ = Value::new_var_def(self.src(), loc, $<ShipId>2, expr);
         }
 
     var_id:
         general_id {
-            // $$ = $1;
+            $$ = $1;
         }
 
     constructor_def:
         kTHIS params kIS body kEND {
-            // $$ = Value::new_constructor_def($<Params>2, $<ShipBody>4);
+            let kthis = $<Token>1;
+            let params = $<ShipParams>2;
+            let kis = $<Token>3;
+            let members = $<BodyBuilder>4;
+            let kend = $<Token>5;
+
+            let body_loc = Loc::merge_from(&kis, &kend);
+            let body = ShipBody::new(BodyData{ members }, body_loc, self.src());
+
+            let loc = Loc::merge_from(&kthis, &kend);
+            $$ = Value::new_cons_def(self.src(), loc, params, body);
         }
 
     method_def:
         method_decl {
-            // $$ = $1;
+            $$ = $1;
         } | method_decl method_body {
-            // let method_decl = $<ShipMethodDefinition>1;
-            // $$ = Value::MethodDef(ShipMethodDefinition{ body: Option::Some(Box::new($<ShipMethodBody>2)), ..method_decl });
+            let method_decl = $<ShipMethodDef>1;
+            let method_body = $<ShipMethodBodyAll>2;
+            let loc = Loc::merge_from(method_decl.as_ref(), &method_body);
+            $$ = Value::MethodDef(ShipMethodDef::new(MethodDefData{ body: Some(method_body), ..method_decl.data.clone() }, loc, self.src()));
         }
 
     method_decl:
         kMETHOD method_id params {
-            // $$ = Value::new_method_def($<Id>2, $<Params>3, Option::None, Option::None);
+            let kmethod = $<Token>1;
+            let method_id = $<ShipId>2;
+            let params = $<ShipParams>3;
+            let loc = Loc::merge_from(&kmethod, params.as_ref());
+            $$ = Value::new_method_def(self.src(), loc, method_id, params, Option::None, Option::None);
         } | kMETHOD method_id params tCOLON type_id {
-            // $$ = Value::new_method_def($<Id>2, $<Params>3, Option::Some($<Id>5), Option::None);
+            let kmethod = $<Token>1;
+            let method_id = $<ShipId>2;
+            let params = $<ShipParams>3;
+            let type_id = $<ShipId>5;
+            let loc = Loc::merge_from(&kmethod, type_id.as_ref());
+            $$ = Value::new_method_def(self.src(), loc, method_id, params, Option::Some(type_id), Option::None);
         }
 
     method_id:
         general_id {
-            // $$ = $1;
+            $$ = $1;
         }
 
     params:
         tLPAREN maybe_param_array tRPAREN {
-            // $$ = $2;
+            let loc = Loc::merge_from(&$<Token>1, &$<Token>3);
+            $$ = Value::new_params(self.src(), loc, $<ParamsBuilder>2);
         }
 
     maybe_param_array:
         %empty {
-            // $$ = Value::new_params(vec![]);
+            $$ = Value::new_params_builder(vec![]);
         } | param_array {
-            // $$ = $1;
+            $$ = $1;
         }
 
     param_array:
         param {
-            // $$ = Value::new_params(vec![$<ShipParam>1]);
+            $$ = Value::new_params_builder(vec![$<ShipParam>1]);
         } | params tCOMMA param {
-            // let mut params = $<Params>1;
-            // params.push($<ShipParam>2);
-            // $$ = Value::new_params(params);
+            let mut params = $<ParamsBuilder>1;
+            params.push($<ShipParam>3);
+            $$ = Value::new_params_builder(params);
         }
 
     param:
         param_id tCOLON type_id {
-            // $$ = Value::new_param($<Id>1, $<Id>3);
+            let param_id = $<ShipId>1;
+            let type_id = $<ShipId>3;
+            let loc = Loc::merge_from(param_id.as_ref(), type_id.as_ref());
+            $$ = Value::new_param(self.src(), loc, param_id, type_id);
         }
 
     param_id:
         general_id {
-            // $$ = $1;
+            $$ = $1;
         }
 
     type_id:
         class_id {
-            // $$ = $1;
+            $$ = $1;
         }
 
     method_body:
         kIS body kEND {
-            // $$ = Value::new_method_body($<ShipBody>2);
+            let kis = $<Token>1;
+            let kend = $<Token>3;
+
+            let members = $<BodyBuilder>2;
+            let body_loc = Loc::merge_from(&kis, &kend);
+            let body = ShipBody::new(BodyData{ members }, body_loc, self.src());
+
+            $$ = Value::new_method_body(self.src(), ShipMethodBodyAll::Body(body));
         } | tARROW expr {
-            // $$ = Value::new_method_body_short($<ShipExpression>2);
+            $$ = Value::new_method_body(self.src(), ShipMethodBodyAll::Expr($<ShipExprAll>2));
         }
 
     body:
         maybe_body_members {
-            // $$ = $1;
+            $$ = $1;
         } | maybe_body_members return_stmt {
-            // let mut body = $<ShipBody>1;
-            // let stmt = $<ShipStatement>2;
-            // body.members.push(ShipBodyMember::Stmt(Box::new(stmt))); //TODO
-            // $$ = Value::new_body(body);
+            let mut body = $<BodyBuilder>1;
+            let return_stmt = $<ShipReturnStmt>2;
+            let stmt = ShipStmtAll::Return(return_stmt);
+            let member = ShipBodyMemberAll::Stmt(stmt);
+            body.push(member);
+            $$ = Value::new_body_builder(body);
         }
 
     maybe_body_members:
         %empty {
-            // $$ = Value::new_body(ShipBody{ members: vec![] });
+            $$ = Value::new_body_builder(vec![]);
         } | body_members {
-            // $$ = $1;
+            $$ = $1;
         }
     body_members:
         body_member {
-            // $$ = Value::new_body(ShipBody{ members: vec![$<ShipBodyMember>1] });
+            $$ = Value::new_body_builder(vec![$<ShipBodyMemberAll>1]);
         } | body_members body_member {
-            // let mut body = $<ShipBody>1;
-            // body.members.push($<ShipBodyMember>2);
-            // $$ = Value::new_body(body);
+            let mut body = $<BodyBuilder>1;
+            body.push($<ShipBodyMemberAll>2);
+            $$ = Value::new_body_builder(body);
         }
 
     body_member:
         var_def {
-            // $$ = Value::new_body_member_var_def($<ShipVarDefinition>1);
+            $$ = Value::new_body_member(self.src(), ShipBodyMemberAll::VarDef($<ShipVarDef>1));
         } | stmt {
-            // $$ = Value::new_body_member_stmt($<ShipStatement>1);
+            $$ = Value::new_body_member(self.src(), ShipBodyMemberAll::Stmt($<ShipStmtAll>1));
         }
 
     expr:
         member_access {
-            $$ = Value::new_expr(self.src(), ShipExpressionAll::MemberAccess($<ShipMemberAccessExpr>1));
+            $$ = Value::new_expr(self.src(), ShipExprAll::MemberAccess($<ShipMemberAccessExpr>1));
         } | method_call {
-            // $$ = $1;
+            $$ = Value::new_expr(self.src(), ShipExprAll::MethodCall($<ShipMethodCallExpr>1));
         } | primary {
-            // $$ = Value::new_expr(ShipExpressionAll::Primary($<ShipPrimaryAll>1));
+            $$ = Value::new_expr(self.src(), ShipExprAll::Primary($<ShipPrimaryAll>1));
         }
 
     /* constructor_call:
@@ -251,12 +310,12 @@ use crate::ast::*;
 
     member_access:
         expr tDOT var_id {
-            $$ = Value::new_member_access(self.src(), $<ShipExpressionAll>1, $<ShipId>3);
+            $$ = Value::new_member_access(self.src(), $<ShipExprAll>1, $<ShipId>3);
         }
 
     method_call:
         expr args {
-            // $$ = Value::new_expr_method_call($<ShipExpression>1, $<Args>2);
+            $$ = Value::new_method_call(self.src(), $<ShipExprAll>1, $<ShipArgs>2);
         }
 
     primary:
@@ -272,56 +331,96 @@ use crate::ast::*;
 
     args:
         tLPAREN maybe_args_array tRPAREN {
-            // $$ = $2;
+            let loc = Loc::merge_from(&$<Token>1, &$<Token>3);
+            $$ = Value::new_args(self.src(), loc, $<ArgsBuilder>2);
         }
 
     maybe_args_array:
         %empty {
-            // $$ = Value::new_args(vec![]);
+            $$ = Value::new_args_builder(vec![]);
         } | args_array {
-            // $$ = $1;
+            $$ = $1;
         }
 
     args_array:
         expr {
-            // $$ = Value::new_args(vec![$<ShipExpression>1]);
+            $$ = Value::new_args_builder(vec![$<ShipExprAll>1]);
         } | args_array tCOMMA expr {
-            // let mut args = $<Args>1;
-            // args.push($<ShipExpression>3);
-            // $$ = Value::new_args(args);
+            let mut args = $<ArgsBuilder>1;
+            args.push($<ShipExprAll>3);
+            $$ = Value::new_args_builder(args);
         }
 
     stmt:
         assign_stmt {
-            // $$ = $1;
+            $$ = Value::new_stmt(self.src(), ShipStmtAll::Assign($<ShipAssignStmt>1));
         } | while_stmt {
-            // $$ = $1;
+            $$ = Value::new_stmt(self.src(), ShipStmtAll::While($<ShipWhileStmt>1));
         } | if_stmt {
-            // $$ = $1;
+            $$ = Value::new_stmt(self.src(), ShipStmtAll::If($<ShipIfStmt>1));
         }
 
     assign_stmt:
         expr tASSIGN expr {
-            // $$ = Value::new_stmt_assign($<ShipExpression>1, $<ShipExpression>3);
+            let left = $<ShipExprAll>1;
+            let right = $<ShipExprAll>3;
+            let loc = Loc::merge_from(&left, &right);
+            $$ = Value::new_assign_stmt(self.src(), loc, left, right);
         }
 
     while_stmt:
         kWHILE expr kLOOP body kEND {
-            // $$ = Value::new_stmt_while($<ShipExpression>2, $<ShipBody>4);
+            let kwhile = $<Token>1;
+            let kloop = $<Token>3;
+            let kend = $<Token>5;
+
+            let members = $<BodyBuilder>4;
+            let body_loc = Loc::merge_from(&kloop, &kend);
+            let body = ShipBody::new(BodyData{ members }, body_loc, self.src());
+
+            let loc = Loc::merge_from(&kwhile, &kend);
+            $$ = Value::new_while_stmt(self.src(), loc, $<ShipExprAll>2, body);
         }
 
     if_stmt:
         kIF expr kTHEN body kEND {
-            // $$ = Value::new_stmt_if($<ShipExpression>2, $<ShipBody>4, Option::None);
+            let kif = $<Token>1;
+            let kthen = $<Token>3;
+            let kend = $<Token>5;
+
+            let members = $<BodyBuilder>4;
+            let body_loc = Loc::merge_from(&kthen, &kend);
+            let body = ShipBody::new(BodyData{ members }, body_loc, self.src());
+
+            let loc = Loc::merge_from(&kif, &kend);
+            $$ = Value::new_if_stmt(self.src(), loc, $<ShipExprAll>2, body, Option::None);
         } | kIF expr kTHEN body kELSE body kEND {
-            // $$ = Value::new_stmt_if($<ShipExpression>2, $<ShipBody>4, Option::Some($<ShipBody>6));
+            let kif = $<Token>1;
+            let kthen = $<Token>3;
+            let kelse = $<Token>5;
+            let kend = $<Token>7;
+
+            let then_members = $<BodyBuilder>4;
+            let then_body_loc = Loc::merge_from(&kthen, &kelse);
+            let then_body = ShipBody::new(BodyData{ members: then_members }, then_body_loc, self.src());
+
+            let else_members = $<BodyBuilder>6;
+            let else_body_loc = Loc::merge_from(&kelse, &kend);
+            let else_body = ShipBody::new(BodyData{ members: else_members }, else_body_loc, self.src());
+
+            let loc = Loc::merge_from(&kif, &kend);
+            $$ = Value::new_if_stmt(self.src(), loc, $<ShipExprAll>2, then_body, Option::Some(else_body));
         }
 
     return_stmt:
         kRETURN {
-            // $$ = Value::new_stmt_return(Option::None);
+            let loc = $<Token>1.loc();
+            $$ = Value::new_return_stmt(self.src(), loc, Option::None);
         } | kRETURN expr {
-            // $$ = Value::new_stmt_return(Option::Some($<ShipExpression>2));
+            let kreturn = $<Token>1;
+            let expr = $<ShipExprAll>2;
+            let loc = Loc::merge_from(&kreturn, &expr);
+            $$ = Value::new_return_stmt(self.src(), loc, Option::Some(expr));
         }
 
     int:

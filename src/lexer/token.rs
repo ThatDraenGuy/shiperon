@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display};
 
 use crate::{
     TokenRegistry,
-    parser::{ParserLoc, token_name},
+    parser::{ParserLoc, WithParserLoc, token_name},
 };
 
 pub type TokenType = i32;
@@ -60,5 +60,11 @@ impl Debug for Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format!("{self:?}"))
+    }
+}
+
+impl WithParserLoc for Token {
+    fn loc(&self) -> ParserLoc {
+        self.loc
     }
 }
