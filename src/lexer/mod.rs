@@ -49,7 +49,7 @@ impl<'src, S: ByteSource<'src>> Lexer<'src, S> {
     }
 
     fn peek_maybe(&mut self) -> LexResult<Option<u8>> {
-        self.iter.peek().map_err(|e| S::Iter::report_error(e)).map_err(|e| self.make_err(e))
+        self.iter.peek().map_err(S::Iter::report_error).map_err(|e| self.make_err(e))
     }
     fn peek(&mut self) -> LexResult<u8> {
         self.peek_maybe().and_then(|maybe_b| self.make_eof_if_none(maybe_b))
