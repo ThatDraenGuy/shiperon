@@ -1,11 +1,8 @@
-// mod source;
 mod token;
 
-// pub use source::ByteSourceIter;
 pub use token::{Token, TokenType, TokenValue};
 
 use crate::{
-    // lexer::source::{FileSource, StrSource},
     parser::ParserLoc,
     source::{ByteSource, ByteSourceIter, StrSource},
 };
