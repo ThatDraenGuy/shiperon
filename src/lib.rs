@@ -1,5 +1,8 @@
 pub mod ast;
 
+pub mod error;
+pub use error::ShipError;
+
 pub mod lexer;
 pub use lexer::Lexer;
 pub use lexer::TokenRegistry;

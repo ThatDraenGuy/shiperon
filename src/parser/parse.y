@@ -14,7 +14,7 @@ use crate::Lexer as AppLexer;
 use crate::TokenRegistry as Lexer;
 use crate::lexer::Token;
 use crate::ByteSource;
-use crate::parser::{WithParserLoc, value::*, ParserLoc as Loc, ParserValue as Value};
+use crate::parser::{Diagnostics, ParserError, WithParserLoc, value::*, ParserLoc as Loc, ParserValue as Value};
 use crate::ast::*;
 }
 
@@ -22,6 +22,7 @@ use crate::ast::*;
     lexer: AppLexer<'src /* 'fix quotes */, S>,
     debug: bool,
     pub result: Option<Rc<ShipProgram<'src /* 'fix quotes */>>>,
+    pub diagnostics: Diagnostics,
 }
 
 %code {
@@ -100,6 +101,12 @@ use crate::ast::*;
             let mut classes = $<ClassDefsBuilder>1;
             classes.push($<ShipClassDef>2);
             $$ = Value::new_class_defs_builder(classes);
+        } | error class_def {
+            $$ = Value::new_class_defs_builder(vec![$<ShipClassDef>2]);
+        } | class_defs error class_def {
+            let mut classes = $<ClassDefsBuilder>1;
+            classes.push($<ShipClassDef>3);
+            $$ = Value::new_class_defs_builder(classes);
         }
 
     class_def:
@@ -135,6 +142,12 @@ use crate::ast::*;
         } | class_members class_member {
             let mut members = $<ClassMembersBuilder>1;
             members.push($<ShipClassMemberAll>2);
+            $$ = Value::new_class_members_builder(members);
+        } | error class_member {
+            $$ = Value::new_class_members_builder(vec![$<ShipClassMemberAll>2]);
+        } | class_members error class_member {
+            let mut members = $<ClassMembersBuilder>1;
+            members.push($<ShipClassMemberAll>3);
             $$ = Value::new_class_members_builder(members);
         }
 
@@ -226,6 +239,12 @@ use crate::ast::*;
             let mut params = $<ParamsBuilder>1;
             params.push($<ShipParam>3);
             $$ = Value::new_params_builder(params);
+        } | error param {
+            $$ = Value::new_params_builder(vec![$<ShipParam>2]);
+        } | params tCOMMA error param {
+            let mut params = $<ParamsBuilder>1;
+            params.push($<ShipParam>4);
+            $$ = Value::new_params_builder(params);
         }
 
     param:
@@ -284,6 +303,12 @@ use crate::ast::*;
         } | body_members body_member {
             let mut body = $<BodyBuilder>1;
             body.push($<ShipBodyMemberAll>2);
+            $$ = Value::new_body_builder(body);
+        } | error body_member {
+            $$ = Value::new_body_builder(vec![$<ShipBodyMemberAll>2]);
+        } | body_members error body_member {
+            let mut body = $<BodyBuilder>1;
+            body.push($<ShipBodyMemberAll>3);
             $$ = Value::new_body_builder(body);
         }
 
@@ -348,6 +373,12 @@ use crate::ast::*;
         } | args_array tCOMMA expr {
             let mut args = $<ArgsBuilder>1;
             args.push($<ShipExprAll>3);
+            $$ = Value::new_args_builder(args);
+        } | error expr {
+            $$ = Value::new_args_builder(vec![$<ShipExprAll>2]);
+        } | args_array tCOMMA error expr {
+            let mut args = $<ArgsBuilder>1;
+            args.push($<ShipExprAll>4);
             $$ = Value::new_args_builder(args);
         }
 
@@ -453,6 +484,7 @@ impl<'src /* 'fix quotes */, S: ByteSource<'src /* 'fix quotes */>> Parser<'src 
             yylexer: Lexer{},
             lexer,
             result: None,
+            diagnostics: Default::default(),
             debug,
         }
     }
@@ -465,7 +497,8 @@ impl<'src /* 'fix quotes */, S: ByteSource<'src /* 'fix quotes */>> Parser<'src 
         self.lexer.yylex()
     }
 
-    fn report_syntax_error(&self, stack: &YYStack, yytoken: &SymbolKind, loc: YYLoc) {
+    fn report_syntax_error(&mut self, stack: &YYStack, yytoken: &SymbolKind, loc: YYLoc) {
+        self.diagnostics.add(ParserError::UnexpectedToken{ token: yytoken.clone(), loc });
         eprintln!("report_syntax_error: {:#?} {:?} {:?}", stack, yytoken, loc)
     }
 }

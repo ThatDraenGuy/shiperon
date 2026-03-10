@@ -1,4 +1,7 @@
-use std::{fmt::Debug, rc::Rc};
+use std::{
+    fmt::{Debug, Display},
+    rc::Rc,
+};
 
 use serde::{Serialize, ser::SerializeStruct};
 
@@ -19,6 +22,12 @@ impl Debug for NodeLoc {
     }
 }
 
+impl Display for NodeLoc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self))
+    }
+}
+
 impl Serialize for NodeLoc {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -28,7 +37,9 @@ impl Serialize for NodeLoc {
     }
 }
 
-pub trait NodeData: Debug + Serialize {}
+pub trait NodeData: Debug + Serialize {
+    fn name() -> &'static str;
+}
 
 #[derive(Clone)]
 pub struct Node<'src, N: NodeData> {
