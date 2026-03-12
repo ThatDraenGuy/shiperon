@@ -75,6 +75,12 @@ impl<'src, N: NodeData> Debug for Node<'src, N> {
     }
 }
 
+impl<'src, N: NodeData> Display for Node<'src, N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{} ({} - {})", N::name(), self.start, self.end))
+    }
+}
+
 impl<'src, N: NodeData> Serialize for Node<'src, N> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

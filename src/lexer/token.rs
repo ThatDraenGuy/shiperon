@@ -40,20 +40,25 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn type_name(&self) -> &'static str {
-        if self.token_type == TokenRegistry::YYUNDEF {
+    pub fn type_name(token_type: TokenType) -> &'static str {
+        if token_type == TokenRegistry::YYUNDEF {
             "YYUNDEF"
-        } else if self.token_type == TokenRegistry::YYerror {
+        } else if token_type == TokenRegistry::YYerror {
             "YYerror"
         } else {
-            token_name(self.token_type)
+            token_name(token_type)
         }
     }
 }
 
 impl Debug for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("[ ({:?})\t{} {}]", self.loc, self.type_name(), self.token_value))
+        f.write_str(&format!(
+            "[ ({:?})\t{} {}]",
+            self.loc,
+            Self::type_name(self.token_type),
+            self.token_value
+        ))
     }
 }
 

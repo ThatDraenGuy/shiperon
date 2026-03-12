@@ -37,7 +37,7 @@ impl<'src> StrSource<'src> {
             .expect("there should be line");
 
         let (line_start, _) = self.line_breaks[line_idx];
-        NodeLoc { line: line_idx, col: pos - line_start }
+        NodeLoc { line: line_idx + 1, col: pos - line_start + 1 }
     }
 }
 

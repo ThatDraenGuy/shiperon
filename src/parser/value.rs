@@ -3,9 +3,16 @@ use std::rc::Rc;
 use crate::{
     ByteSource,
     ast::*,
+    diagnostics::Diagnostic,
     lexer::{Token, TokenValue},
     parser::ParserLoc,
 };
+
+pub struct ParseData<'src, S: ByteSource<'src>> {
+    pub program: Option<Rc<ShipProgram<'src>>>,
+    pub diagnostics: Vec<Diagnostic<'src>>,
+    pub src: S,
+}
 
 #[derive(Clone, Debug, Default)]
 pub enum ParserValue<'src> {
@@ -488,14 +495,14 @@ impl<'src> ParserValue<'src> {
         Self::WhileStmt(ShipWhileStmt::new(WhileStmtData { condition, body }, loc, src))
     }
 
-    pub fn new_return_stmt(
-        src: &impl ByteSource<'src>,
-        loc: ParserLoc,
-        value: Option<ShipExprAll<'src>>,
+    pub fn handle_return_stmt(
+        return_stmt: Rc<ShipReturnStmt<'src>>,
+        mut afters: Vec<ShipBodyMemberAll<'src>>,
     ) -> Self {
-        Self::ReturnStmt(ShipReturnStmt::new(ReturnStmtData { value }, loc, src))
+        let mut body = vec![ShipBodyMemberAll::Stmt(ShipStmtAll::Return(return_stmt))];
+        body.append(&mut afters);
+        Self::BodyBuilder(body)
     }
-
     pub fn new_stmt(_src: &impl ByteSource<'src>, stmt: ShipStmtAll<'src>) -> Self {
         Self::Stmt(stmt)
     }

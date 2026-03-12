@@ -1,50 +1,16 @@
-use std::error::Error;
+use std::{error::Error, fs::read_to_string};
 
 use ron::ser::PrettyConfig;
 use shiperon::{Lexer, Parser};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // let mut parser = Parser::new(
-    //     Lexer::of_str(
-    //         "
-    // class Program is
-    //     this() is
-    //         var sum: Integer(0)
-    //         var limit: Integer(10)
-    //         var i: 0
-    //         !
-    //         while i.Less(limit) loop
-    //             if i.Rem(2).Equal(0) then
-    //                 sum := sum.Plus(i)
-    //             end
-    //         end
-    //         return sum
-    //     end
-    // end
-    // class Test is
-    // end
-    //             ",
-    //     ),
-    //     true,
-    // );
-    let mut parser = Parser::new(
-        Lexer::of_str(
-            "
-    class Program is
-        this() is
-            var sum: 0
-            var aboba: 1.0
-            var limit: 10
-        end
-    end
-                ",
-        ),
-        true,
-    );
-    parser.parse();
-    let str_result = ron::ser::to_string_pretty(&parser.result, PrettyConfig::default())?;
+    let input = read_to_string("tests/parser/inputs/invalid.po")?;
+    let parser = Parser::new(Lexer::of_str(&input), false);
+    let parse_data = parser.consume_parse();
+    let str_result = ron::ser::to_string_pretty(&parse_data.program, PrettyConfig::default())?;
     println!("{str_result}");
-    println!("{:?}", parser.diagnostics);
-    // println!("{:?}", parser.result);
+    for item in &parse_data.diagnostics {
+        println!("{}\n", item.render(&parse_data.src));
+    }
     Ok(())
 }

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{fmt::Display, rc::Rc};
 
 use serde::Serialize;
 
@@ -35,6 +35,16 @@ pub enum ShipClassMemberAll<'src> {
     VarDef(Rc<ShipVarDef<'src>>),
     MethodDef(Rc<ShipMethodDef<'src>>),
     ConsDef(Rc<ShipConsDef<'src>>),
+}
+
+impl<'src> Display for ShipClassMemberAll<'src> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&match self {
+            ShipClassMemberAll::VarDef(node) => format!("{node}"),
+            ShipClassMemberAll::MethodDef(node) => format!("{node}"),
+            ShipClassMemberAll::ConsDef(node) => format!("{node}"),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -88,6 +98,15 @@ impl<'src> WithParserLoc for ShipMethodBodyAll<'src> {
     }
 }
 
+impl<'src> Display for ShipMethodBodyAll<'src> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&match self {
+            ShipMethodBodyAll::Body(node) => format!("{node}"),
+            ShipMethodBodyAll::Expr(expr) => format!("{expr}"),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ConsDefData<'src> {
     pub params: Rc<ShipParams<'src>>,
@@ -129,6 +148,15 @@ pub enum ShipBodyMemberAll<'src> {
     Stmt(ShipStmtAll<'src>),
 }
 
+impl<'src> Display for ShipBodyMemberAll<'src> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&match self {
+            ShipBodyMemberAll::VarDef(node) => format!("{node}"),
+            ShipBodyMemberAll::Stmt(stmt) => format!("{stmt}"),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub enum ShipStmtAll<'src> {
     Assign(Rc<ShipAssignStmt<'src>>),
@@ -137,6 +165,19 @@ pub enum ShipStmtAll<'src> {
     Return(Rc<ShipReturnStmt<'src>>),
     MethodCall(Rc<ShipMethodCallExpr<'src>>),
     ConsCall(Rc<ShipConsCallExpr<'src>>),
+}
+
+impl<'src> Display for ShipStmtAll<'src> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&match self {
+            ShipStmtAll::Assign(node) => format!("{node}"),
+            ShipStmtAll::While(node) => format!("{node}"),
+            ShipStmtAll::If(node) => format!("{node}"),
+            ShipStmtAll::Return(node) => format!("{node}"),
+            ShipStmtAll::MethodCall(node) => format!("{node}"),
+            ShipStmtAll::ConsCall(node) => format!("{node}"),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -205,6 +246,17 @@ impl<'src> WithParserLoc for ShipExprAll<'src> {
     }
 }
 
+impl<'src> Display for ShipExprAll<'src> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&match self {
+            ShipExprAll::ConsCall(node) => format!("{node}"),
+            ShipExprAll::MemberAccess(node) => format!("{node}"),
+            ShipExprAll::MethodCall(node) => format!("{node}"),
+            ShipExprAll::Primary(primary) => format!("{primary}"),
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ConsCallExprData<'src> {
     pub class_id: Rc<ShipId<'src>>,
@@ -267,6 +319,17 @@ impl<'src> WithParserLoc for ShipPrimaryAll<'src> {
             ShipPrimaryAll::This(node) => node.loc(),
             ShipPrimaryAll::Id(node) => node.loc(),
         }
+    }
+}
+
+impl<'src> Display for ShipPrimaryAll<'src> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&match self {
+            ShipPrimaryAll::Int(node) => format!("{node}"),
+            ShipPrimaryAll::Float(node) => format!("{node}"),
+            ShipPrimaryAll::This(node) => format!("{node}"),
+            ShipPrimaryAll::Id(node) => format!("{node}"),
+        })
     }
 }
 

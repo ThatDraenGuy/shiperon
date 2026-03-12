@@ -14,15 +14,16 @@ use crate::Lexer as AppLexer;
 use crate::TokenRegistry as Lexer;
 use crate::lexer::Token;
 use crate::ByteSource;
-use crate::parser::{Diagnostics, ParserError, WithParserLoc, value::*, ParserLoc as Loc, ParserValue as Value};
+use crate::parser::{WithParserLoc, value::*, ParserLoc as Loc, ParserValue as Value};
 use crate::ast::*;
+use crate::diagnostics::*;
 }
 
 %code parser_fields {
     lexer: AppLexer<'src /* 'fix quotes */, S>,
     debug: bool,
-    pub result: Option<Rc<ShipProgram<'src /* 'fix quotes */>>>,
-    pub diagnostics: Diagnostics,
+    result: Option<Rc<ShipProgram<'src /* 'fix quotes */>>>,
+    diagnostics: Vec<Diagnostic<'src /* 'fix quotes */>>,
 }
 
 %code {
@@ -76,13 +77,7 @@ use crate::ast::*;
     program:
         maybe_class_defs {
             let classes = $<ClassDefsBuilder>1;
-            let loc = match (classes.first(), classes.last()) {
-                (None, None) => Loc{ begin: 0, end: 0 },
-                (Some(first), _) => first.loc(),
-                (Some(first), Some(last)) => Loc::merge_from(first.as_ref(), last.as_ref()),
-                (_, _) => unreachable!("literally how"),
-            };
-            let program = Value::new_program(self.src(), loc, classes);
+            let program = Value::new_program(self.src(), *@1, classes);
             self.result = Some(ShipProgram::from(program));
             $$ = Value::None;
         }
@@ -121,7 +116,7 @@ use crate::ast::*;
             let kend = $<Token>7;
 
             let loc = Loc::merge_from(&kclass, &kend);
-            $$ = Value::new_class_def(self.src(), loc, $<ShipId>2, Option::Some($<ShipId>4), $<ClassMembersBuilder>4);
+            $$ = Value::new_class_def(self.src(), loc, $<ShipId>2, Option::Some($<ShipId>4), $<ClassMembersBuilder>6);
         }
 
     class_id:
@@ -284,10 +279,8 @@ use crate::ast::*;
             $$ = $1;
         } | maybe_body_members return_stmt {
             let mut body = $<BodyBuilder>1;
-            let return_stmt = $<ShipReturnStmt>2;
-            let stmt = ShipStmtAll::Return(return_stmt);
-            let member = ShipBodyMemberAll::Stmt(stmt);
-            body.push(member);
+            let mut body2 = $<BodyBuilder>2;
+            body.append(&mut body2);
             $$ = Value::new_body_builder(body);
         }
 
@@ -444,14 +437,34 @@ use crate::ast::*;
         }
 
     return_stmt:
-        kRETURN {
+        kRETURN body {
             let loc = $<Token>1.loc();
-            $$ = Value::new_return_stmt(self.src(), loc, Option::None);
-        } | kRETURN expr {
+            let afters = $<BodyBuilder>2;
+            let afters_exist = !afters.is_empty();
+            let return_stmt = ShipReturnStmt::new(
+                ReturnStmtData { value: Option::None },
+                loc,
+                self.src(),
+            );
+            $$ = Value::handle_return_stmt(return_stmt.clone(), afters);
+            if afters_exist {
+                self.register_warn(*@2, Reason::BodyMembersAfterReturn{ return_stmt });
+            }
+        }| kRETURN expr body {
             let kreturn = $<Token>1;
             let expr = $<ShipExprAll>2;
+            let afters = $<BodyBuilder>3;
+            let afters_exist = !afters.is_empty();
             let loc = Loc::merge_from(&kreturn, &expr);
-            $$ = Value::new_return_stmt(self.src(), loc, Option::Some(expr));
+            let return_stmt = ShipReturnStmt::new(
+                ReturnStmtData { value: Option::Some(expr) },
+                loc,
+                self.src(),
+            );
+            $$ = Value::handle_return_stmt(return_stmt.clone(), afters);
+            if afters_exist {
+                self.register_warn(*@3, Reason::BodyMembersAfterReturn{ return_stmt });
+            }
         }
 
     int:
@@ -484,7 +497,7 @@ impl<'src /* 'fix quotes */, S: ByteSource<'src /* 'fix quotes */>> Parser<'src 
             yylexer: Lexer{},
             lexer,
             result: None,
-            diagnostics: Default::default(),
+            diagnostics: vec![],
             debug,
         }
     }
@@ -497,8 +510,27 @@ impl<'src /* 'fix quotes */, S: ByteSource<'src /* 'fix quotes */>> Parser<'src 
         self.lexer.yylex()
     }
 
+    fn register_warn(&mut self, loc: Loc, reason: Reason<'src /* 'fix quotes */>) {
+        self.diagnostics.push(Diagnostic{level: ErrorLevel::Warn, loc, reason});
+    }
+
+    fn register_error(&mut self, loc: Loc, reason: Reason<'src /* 'fix quotes */>) {
+        self.diagnostics.push(Diagnostic{level: ErrorLevel::Err, loc, reason});
+    }
+
+    fn yyerror(&mut self, loc: Loc, reason: Reason<'src /* 'fix quotes */>) -> Result<i32, ()> {
+        self.register_error(loc, reason);
+        Err(())
+    }
+
     fn report_syntax_error(&mut self, stack: &YYStack, yytoken: &SymbolKind, loc: YYLoc) {
-        self.diagnostics.add(ParserError::UnexpectedToken{ token: yytoken.clone(), loc });
-        eprintln!("report_syntax_error: {:#?} {:?} {:?}", stack, yytoken, loc)
+        let id: usize = yytoken.code().try_into().expect("failed to convert token code into i32, is it too big?");
+        self.register_error(loc, Reason::UnexpectedToken { token_name: Lexer::TOKEN_NAMES[id] });
+        /* eprintln!("report_syntax_error: {:#?} {:?} {:?}", stack, yytoken, loc) */
+    }
+
+    pub fn consume_parse(mut self) -> ParseData<'src /* 'fix quotes */, S> {
+        self.parse();
+        ParseData { program: self.result, diagnostics: self.diagnostics, src: self.lexer.src }
     }
 }
