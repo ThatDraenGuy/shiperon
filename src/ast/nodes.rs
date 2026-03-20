@@ -39,11 +39,11 @@ pub enum ShipClassMemberAll<'src> {
 
 impl<'src> Display for ShipClassMemberAll<'src> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&match self {
-            ShipClassMemberAll::VarDef(node) => format!("{node}"),
-            ShipClassMemberAll::MethodDef(node) => format!("{node}"),
-            ShipClassMemberAll::ConsDef(node) => format!("{node}"),
-        })
+        match self {
+            ShipClassMemberAll::VarDef(node) => node.fmt(f),
+            ShipClassMemberAll::MethodDef(node) => node.fmt(f),
+            ShipClassMemberAll::ConsDef(node) => node.fmt(f),
+        }
     }
 }
 
@@ -100,10 +100,10 @@ impl<'src> WithParserLoc for ShipMethodBodyAll<'src> {
 
 impl<'src> Display for ShipMethodBodyAll<'src> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&match self {
-            ShipMethodBodyAll::Body(node) => format!("{node}"),
-            ShipMethodBodyAll::Expr(expr) => format!("{expr}"),
-        })
+        match self {
+            ShipMethodBodyAll::Body(node) => node.fmt(f),
+            ShipMethodBodyAll::Expr(expr) => expr.fmt(f),
+        }
     }
 }
 
@@ -150,10 +150,10 @@ pub enum ShipBodyMemberAll<'src> {
 
 impl<'src> Display for ShipBodyMemberAll<'src> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&match self {
-            ShipBodyMemberAll::VarDef(node) => format!("{node}"),
-            ShipBodyMemberAll::Stmt(stmt) => format!("{stmt}"),
-        })
+        match self {
+            ShipBodyMemberAll::VarDef(node) => node.fmt(f),
+            ShipBodyMemberAll::Stmt(stmt) => stmt.fmt(f),
+        }
     }
 }
 
@@ -168,13 +168,13 @@ pub enum ShipStmtAll<'src> {
 
 impl<'src> Display for ShipStmtAll<'src> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&match self {
-            ShipStmtAll::Assign(node) => format!("{node}"),
-            ShipStmtAll::While(node) => format!("{node}"),
-            ShipStmtAll::If(node) => format!("{node}"),
-            ShipStmtAll::Return(node) => format!("{node}"),
-            ShipStmtAll::MethodCall(node) => format!("{node}"),
-        })
+        match self {
+            ShipStmtAll::Assign(node) => node.fmt(f),
+            ShipStmtAll::While(node) => node.fmt(f),
+            ShipStmtAll::If(node) => node.fmt(f),
+            ShipStmtAll::Return(node) => node.fmt(f),
+            ShipStmtAll::MethodCall(node) => node.fmt(f),
+        }
     }
 }
 
@@ -228,30 +228,30 @@ pub type ShipReturnStmt<'src> = Node<'src, ReturnStmtData<'src>>;
 
 #[derive(Debug, Clone, Serialize)]
 pub enum ShipExprAll<'src> {
-    ConsCall(Rc<ShipConsCallExpr<'src>>),
     MemberAccess(Rc<ShipMemberAccessExpr<'src>>),
     MethodCall(Rc<ShipMethodCallExpr<'src>>),
     Primary(ShipPrimaryAll<'src>),
+    ClassCast(Rc<ShipClassCastExpr<'src>>),
 }
 impl<'src> WithParserLoc for ShipExprAll<'src> {
     fn loc(&self) -> crate::parser::ParserLoc {
         match self {
-            ShipExprAll::ConsCall(node) => node.loc(),
             ShipExprAll::MemberAccess(node) => node.loc(),
             ShipExprAll::MethodCall(node) => node.loc(),
             ShipExprAll::Primary(primary) => primary.loc(),
+            ShipExprAll::ClassCast(node) => node.loc(),
         }
     }
 }
 
 impl<'src> Display for ShipExprAll<'src> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&match self {
-            ShipExprAll::ConsCall(node) => format!("{node}"),
-            ShipExprAll::MemberAccess(node) => format!("{node}"),
-            ShipExprAll::MethodCall(node) => format!("{node}"),
-            ShipExprAll::Primary(primary) => format!("{primary}"),
-        })
+        match self {
+            ShipExprAll::MemberAccess(node) => node.fmt(f),
+            ShipExprAll::MethodCall(node) => node.fmt(f),
+            ShipExprAll::Primary(primary) => primary.fmt(f),
+            ShipExprAll::ClassCast(node) => node.fmt(f),
+        }
     }
 }
 
@@ -270,10 +270,10 @@ impl<'src> WithParserLoc for ShipAssignableExprAll<'src> {
 }
 impl<'src> Display for ShipAssignableExprAll<'src> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&match self {
-            ShipAssignableExprAll::MemberAccess(node) => format!("{node}"),
-            ShipAssignableExprAll::Variable(node) => format!("{node}"),
-        })
+        match self {
+            ShipAssignableExprAll::MemberAccess(node) => node.fmt(f),
+            ShipAssignableExprAll::Variable(node) => node.fmt(f),
+        }
     }
 }
 
@@ -303,16 +303,16 @@ impl<'src> Display for ShipCallableExprAll<'src> {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct ConsCallExprData<'src> {
+pub struct ClassCastExprData<'src> {
+    pub expr: ShipExprAll<'src>,
     pub class_id: Rc<ShipId<'src>>,
-    pub args: Rc<ShipArgs<'src>>,
 }
-impl<'src> NodeData for ConsCallExprData<'src> {
+impl<'src> NodeData for ClassCastExprData<'src> {
     fn name() -> &'static str {
-        "ConsCall"
+        "ClassCast"
     }
 }
-pub type ShipConsCallExpr<'src> = Node<'src, ConsCallExprData<'src>>;
+pub type ShipClassCastExpr<'src> = Node<'src, ClassCastExprData<'src>>;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MemberAccessExprData<'src> {
@@ -369,12 +369,12 @@ impl<'src> WithParserLoc for ShipPrimaryAll<'src> {
 
 impl<'src> Display for ShipPrimaryAll<'src> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&match self {
-            ShipPrimaryAll::Int(node) => format!("{node}"),
-            ShipPrimaryAll::Float(node) => format!("{node}"),
-            ShipPrimaryAll::This(node) => format!("{node}"),
-            ShipPrimaryAll::Id(node) => format!("{node}"),
-        })
+        match self {
+            ShipPrimaryAll::Int(node) => node.fmt(f),
+            ShipPrimaryAll::Float(node) => node.fmt(f),
+            ShipPrimaryAll::This(node) => node.fmt(f),
+            ShipPrimaryAll::Id(node) => node.fmt(f),
+        }
     }
 }
 

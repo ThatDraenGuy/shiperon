@@ -26,11 +26,11 @@ pub enum ParserValue<'src> {
     Float(Rc<ShipFloat<'src>>),
     This(Rc<ShipThis<'src>>),
     Primary(ShipPrimaryAll<'src>),
-    ConsCallExpr(Rc<ShipConsCallExpr<'src>>),
     ArgsBuilder(Vec<ShipExprAll<'src>>),
     Args(Rc<ShipArgs<'src>>),
     MethodCallExpr(Rc<ShipMethodCallExpr<'src>>),
     MemberAccessExpr(Rc<ShipMemberAccessExpr<'src>>),
+    ClassCastExpr(Rc<ShipClassCastExpr<'src>>),
     AssignableExpr(ShipAssignableExprAll<'src>),
     CallableExpr(ShipCallableExprAll<'src>),
     Expr(ShipExprAll<'src>),
@@ -110,6 +110,15 @@ impl<'src> ShipPrimaryAll<'src> {
     }
 }
 
+impl<'src> ShipClassCastExpr<'src> {
+    pub fn from(value: ParserValue<'src>) -> Rc<Self> {
+        match value {
+            ParserValue::ClassCastExpr(n) => n,
+            other => unreachable!("expected ClassCastExpr, got {:?}", other),
+        }
+    }
+}
+
 impl<'src> ShipMemberAccessExpr<'src> {
     pub fn from(value: ParserValue<'src>) -> Rc<Self> {
         match value {
@@ -133,15 +142,6 @@ impl<'src> ShipMethodCallExpr<'src> {
         match value {
             ParserValue::MethodCallExpr(n) => n,
             other => unreachable!("expected MethodCallExpr, got {:?}", other),
-        }
-    }
-}
-
-impl<'src> ShipConsCallExpr<'src> {
-    pub fn from(value: ParserValue<'src>) -> Rc<Self> {
-        match value {
-            ParserValue::ConsCallExpr(n) => n,
-            other => unreachable!("expected ConsCallExpr, got {:?}", other),
         }
     }
 }
@@ -433,12 +433,21 @@ impl<'src> ParserValue<'src> {
         Self::Primary(primary)
     }
 
+    pub fn new_class_cast(
+        src: &impl ByteSource<'src>,
+        loc: ParserLoc,
+        expr: ShipExprAll<'src>,
+        class_id: Rc<ShipId<'src>>,
+    ) -> Self {
+        Self::ClassCastExpr(ShipClassCastExpr::new(ClassCastExprData { expr, class_id }, loc, src))
+    }
+
     pub fn new_member_access(
         src: &impl ByteSource<'src>,
+        loc: ParserLoc,
         expr: ShipExprAll<'src>,
         member_id: Rc<ShipId<'src>>,
     ) -> Self {
-        let loc = ParserLoc::merge_from(&expr, member_id.as_ref());
         Self::MemberAccessExpr(ShipMemberAccessExpr::new(
             MemberAccessExprData { expr, member_id },
             loc,
@@ -460,10 +469,10 @@ impl<'src> ParserValue<'src> {
 
     pub fn new_method_call(
         src: &impl ByteSource<'src>,
+        loc: ParserLoc,
         expr: ShipCallableExprAll<'src>,
         args: Rc<ShipArgs<'src>>,
     ) -> Self {
-        let loc = ParserLoc::merge_from(&expr, args.as_ref());
         Self::MethodCallExpr(ShipMethodCallExpr::new(MethodCallExprData { expr, args }, loc, src))
     }
 
@@ -538,14 +547,6 @@ impl<'src> ParserValue<'src> {
         (Self::ReturnStmt(return_stmt.clone()), return_stmt)
     }
 
-    pub fn handle_return_stmt(
-        return_stmt: Rc<ShipReturnStmt<'src>>,
-        mut afters: Vec<ShipBodyMemberAll<'src>>,
-    ) -> Self {
-        let mut body = vec![ShipBodyMemberAll::Stmt(ShipStmtAll::Return(return_stmt))];
-        body.append(&mut afters);
-        Self::BodyBuilder(body)
-    }
     pub fn new_stmt(_src: &impl ByteSource<'src>, stmt: ShipStmtAll<'src>) -> Self {
         Self::Stmt(stmt)
     }

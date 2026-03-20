@@ -1,5 +1,9 @@
 pub mod ast;
 
+pub mod config;
+pub use config::CompilerConfig;
+pub use config::ShipFeature;
+
 pub mod diagnostics;
 
 pub mod lexer;

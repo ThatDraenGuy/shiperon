@@ -8,6 +8,7 @@ class Program is
                 sum := sum.Plus(i)
             end
         end
+        i.Rem(2) := 3
         return sum
         sum := sum.Plus(2)
     end

@@ -4,7 +4,7 @@
 %define api.value.type {Value}
 
 %define api.parser.generic {<'src /* 'fix quotes */, S: ByteSource<'src /* 'fix quotes */>>}
-%define api.parser.check_debug { self.debug }
+%define api.parser.check_debug { self.config.debug }
 %define parse.error custom
 
 %code use {
@@ -17,11 +17,13 @@ use crate::ByteSource;
 use crate::parser::{WithParserLoc, value::*, ParserLoc as Loc, ParserValue as Value};
 use crate::ast::*;
 use crate::diagnostics::*;
+use crate::CompilerConfig;
+use crate::ShipFeature;
 }
 
 %code parser_fields {
     lexer: AppLexer<'src /* 'fix quotes */, S>,
-    debug: bool,
+    config: CompilerConfig,
     result: Option<Rc<ShipProgram<'src /* 'fix quotes */>>>,
     diagnostics: Vec<Diagnostic<'src /* 'fix quotes */>>,
 }
@@ -69,9 +71,9 @@ use crate::diagnostics::*;
     constructor_def
     method_def method_decl method_body method_id params maybe_param_array param_array param
     body maybe_body_members body_members body_member
-    param_id type_id expr stmt member_access method_call
-    assignable_expr callable_expr non_expr_stmt assign_stmt while_stmt if_stmt return_stmt
-    args maybe_args_array args_array primary
+    param_id type_id expr stmt member_access method_call class_cast
+    assignable_expr nonassignable_expr callable_expr noncallable_expr non_expr_stmt assign_stmt while_stmt if_stmt return_stmt
+    args maybe_args_array args_array primary primitive
     int float this general_id
 
 %%
@@ -97,12 +99,8 @@ use crate::diagnostics::*;
             let mut classes = $<ClassDefsBuilder>1;
             classes.push($<ShipClassDef>2);
             $$ = Value::new_class_defs_builder(classes);
-        } | error class_def {
-            $$ = Value::new_class_defs_builder(vec![$<ShipClassDef>2]);
-        } | class_defs error class_def {
-            let mut classes = $<ClassDefsBuilder>1;
-            classes.push($<ShipClassDef>3);
-            $$ = Value::new_class_defs_builder(classes);
+        } | class_defs error {
+            $$ = $1;
         }
 
     class_def:
@@ -139,12 +137,8 @@ use crate::diagnostics::*;
             let mut members = $<ClassMembersBuilder>1;
             members.push($<ShipClassMemberAll>2);
             $$ = Value::new_class_members_builder(members);
-        } | error class_member {
-            $$ = Value::new_class_members_builder(vec![$<ShipClassMemberAll>2]);
-        } | class_members error class_member {
-            let mut members = $<ClassMembersBuilder>1;
-            members.push($<ShipClassMemberAll>3);
-            $$ = Value::new_class_members_builder(members);
+        } | class_members error {
+            $$ = $1;
         }
 
     class_member:
@@ -235,12 +229,8 @@ use crate::diagnostics::*;
             let mut params = $<ParamsBuilder>1;
             params.push($<ShipParam>3);
             $$ = Value::new_params_builder(params);
-        } | error param {
-            $$ = Value::new_params_builder(vec![$<ShipParam>2]);
-        } | params tCOMMA error param {
-            let mut params = $<ParamsBuilder>1;
-            params.push($<ShipParam>4);
-            $$ = Value::new_params_builder(params);
+        } | params error {
+            $$ = $1;
         }
 
     param:
@@ -298,12 +288,9 @@ use crate::diagnostics::*;
             let mut body = $<BodyBuilder>1;
             body.push($<ShipBodyMemberAll>2);
             $$ = Value::new_body_builder(body);
-        } | error body_member {
-            $$ = Value::new_body_builder(vec![$<ShipBodyMemberAll>2]);
-        } | body_members error body_member {
-            let mut body = $<BodyBuilder>1;
-            body.push($<ShipBodyMemberAll>3);
-            $$ = Value::new_body_builder(body);
+        }
+        | body_members error {
+            $$ = $1;
         }
 
     body_member:
@@ -320,8 +307,17 @@ use crate::diagnostics::*;
             $$ = Value::new_expr(self.src(), ShipExprAll::MethodCall($<ShipMethodCallExpr>1));
         } | primary {
             $$ = Value::new_expr(self.src(), ShipExprAll::Primary($<ShipPrimaryAll>1));
-        } | expr kAS class_id {
-            //TODO
+        } | class_cast {
+            $$ = Value::new_expr(self.src(), ShipExprAll::ClassCast($<ShipClassCastExpr>1));
+        }
+
+    noncallable_expr:
+        method_call {
+            $$ = Value::None;
+        } | primitive {
+            $$ = Value::None;
+        } | class_cast {
+            $$ = Value::None;
         }
 
     callable_expr:
@@ -331,34 +327,57 @@ use crate::diagnostics::*;
             $$ = Value::new_callable_expr(self.src(), ShipCallableExprAll::This($<ShipThis>1));
         } | class_id {
             $$ = Value::new_callable_expr(self.src(), ShipCallableExprAll::Cons($<ShipId>1));
-        } //TODO errors
+        }
+
+    nonassignable_expr:
+        method_call {
+            $$ = Value::None;
+        } | primitive {
+            $$ = Value::None;
+        } | this {
+            $$ = Value::None;
+        } | class_cast {
+            $$ = Value::None;
+        }
 
     assignable_expr:
         member_access {
             $$ = Value::new_assignable_expr(self.src(), ShipAssignableExprAll::MemberAccess($<ShipMemberAccessExpr>1));
         } | var_id {
             $$ = Value::new_assignable_expr(self.src(), ShipAssignableExprAll::Variable($<ShipId>1));
-        } //TODO errors
+        }
 
     member_access:
         expr tDOT var_id {
-            $$ = Value::new_member_access(self.src(), $<ShipExprAll>1, $<ShipId>3);
+            $$ = Value::new_member_access(self.src(), Loc::merge(*@1, *@3), $<ShipExprAll>1, $<ShipId>3);
         }
 
     method_call:
         callable_expr args {
-            $$ = Value::new_method_call(self.src(), $<ShipCallableExprAll>1, $<ShipArgs>2);
+            $$ = Value::new_method_call(self.src(), Loc::merge(*@1, *@2), $<ShipCallableExprAll>1, $<ShipArgs>2);
+        } | noncallable_expr args {
+            self.yyerror(*@1, Reason::ExprIsNotCallable{ call_args: $<ShipArgs>2 })?;
         }
 
-    primary:
+    class_cast:
+        expr kAS class_id {
+            self.check_feature(Loc::merge(*@2, *@3), ShipFeature::ClassCasting);
+            $$ = Value::new_class_cast(self.src(), Loc::merge(*@1, *@3), $<ShipExprAll>1, $<ShipId>3);
+        }
+
+    primitive:
         int {
             $$ = Value::new_primary(self.src(), ShipPrimaryAll::Int($<ShipInt>1));
         } | float {
             $$ = Value::new_primary(self.src(), ShipPrimaryAll::Float($<ShipFloat>1));
+        }
+
+    primary:
+        primitive {
+            $$ = $1;
         } | this {
             $$ = Value::new_primary(self.src(), ShipPrimaryAll::This($<ShipThis>1));
-        }
-        | var_id {
+        } | var_id {
             $$ = Value::new_primary(self.src(), ShipPrimaryAll::Id($<ShipId>1));
         }
 
@@ -382,12 +401,8 @@ use crate::diagnostics::*;
             let mut args = $<ArgsBuilder>1;
             args.push($<ShipExprAll>3);
             $$ = Value::new_args_builder(args);
-        } | error expr {
-            $$ = Value::new_args_builder(vec![$<ShipExprAll>2]);
-        } | args_array tCOMMA error expr {
-            let mut args = $<ArgsBuilder>1;
-            args.push($<ShipExprAll>4);
-            $$ = Value::new_args_builder(args);
+        } | args_array error {
+            $$ = $1;
         }
 
     stmt:
@@ -412,6 +427,8 @@ use crate::diagnostics::*;
             let left = $<ShipAssignableExprAll>1;
             let right = $<ShipExprAll>3;
             $$ = Value::new_assign_stmt(self.src(), Loc::merge(*@1, *@3), left, right);
+        } | nonassignable_expr tASSIGN expr {
+            self.yyerror(Loc::merge(*@1, *@3), Reason::ExprIsNotAssignable{ value: $<ShipExprAll>3 })?;
         }
 
     while_stmt:
@@ -497,7 +514,7 @@ use crate::diagnostics::*;
 %%
 
 impl<'src /* 'fix quotes */, S: ByteSource<'src /* 'fix quotes */>> Parser<'src /* 'fix quotes */, S> {
-    pub fn new(lexer: AppLexer<'src /* 'fix quotes */, S>, debug: bool) -> Self {
+    pub fn new(lexer: AppLexer<'src /* 'fix quotes */, S>, config: CompilerConfig) -> Self {
         Self {
             yy_error_verbose: true,
             yynerrs: 0,
@@ -506,7 +523,7 @@ impl<'src /* 'fix quotes */, S: ByteSource<'src /* 'fix quotes */>> Parser<'src 
             lexer,
             result: None,
             diagnostics: vec![],
-            debug,
+            config
         }
     }
 
@@ -516,6 +533,12 @@ impl<'src /* 'fix quotes */, S: ByteSource<'src /* 'fix quotes */>> Parser<'src 
 
     fn next_token(&mut self) -> Token {
         self.lexer.yylex()
+    }
+
+    fn check_feature(&mut self, loc: Loc, feature: ShipFeature) {
+        if !feature.is_enabled(&self.config.features) {
+            self.register_error(loc, Reason::DisabledFeature(feature));
+        }
     }
 
     fn register_warn(&mut self, loc: Loc, reason: Reason<'src /* 'fix quotes */>) {
@@ -534,7 +557,6 @@ impl<'src /* 'fix quotes */, S: ByteSource<'src /* 'fix quotes */>> Parser<'src 
     fn report_syntax_error(&mut self, stack: &YYStack, yytoken: &SymbolKind, loc: YYLoc) {
         let id: usize = yytoken.code().try_into().expect("failed to convert token code into i32, is it too big?");
         self.register_error(loc, Reason::UnexpectedToken { token_name: Lexer::TOKEN_NAMES[id] });
-        /* eprintln!("report_syntax_error: {:#?} {:?} {:?}", stack, yytoken, loc) */
     }
 
     pub fn consume_parse(mut self) -> ParseData<'src /* 'fix quotes */, S> {

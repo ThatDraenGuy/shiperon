@@ -142,6 +142,7 @@ impl<'src, S: ByteSource<'src>> Lexer<'src, S> {
             "then" => self.empty_token(TokenRegistry::kTHEN),
             "else" => self.empty_token(TokenRegistry::kELSE),
             "return" => self.empty_token(TokenRegistry::kRETURN),
+            "as" => self.empty_token(TokenRegistry::kAS),
             _ => self.token(TokenRegistry::tIDENTIFIER, TokenValue::String(string)),
         })
     }
