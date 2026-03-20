@@ -1,0 +1,8 @@
+class Test is
+    this() is
+        var s : "aboba"
+        var c : 'v'
+        var s2 : "aboba\n67"
+        var c2: '\\'
+    end
+end

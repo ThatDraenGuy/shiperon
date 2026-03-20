@@ -4,7 +4,7 @@ use ron::ser::PrettyConfig;
 use shiperon::{CompilerConfig, Lexer, Parser};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input = read_to_string("tests/parser/inputs/invalid.po")?;
+    let input = read_to_string("tests/parser/inputs/string.po")?;
     let parser = Parser::new(Lexer::of_str(&input), CompilerConfig::default());
     let parse_data = parser.consume_parse();
     let str_result = ron::ser::to_string_pretty(&parse_data.program, PrettyConfig::default())?;

@@ -50,11 +50,14 @@ use crate::ShipFeature;
     kELSE       "else"
     kRETURN     "return"
     kAS         "as"
+    kSUPER      "super"
 
 %token
     tIDENTIFIER "identifier"
     tINTEGER    "integer"
     tFLOAT      "float"
+    tSTRING     "string"
+    tCHAR       "char"
 
 %token <token> 
     tCOLON      ":"
@@ -74,7 +77,7 @@ use crate::ShipFeature;
     param_id type_id expr stmt member_access method_call class_cast
     assignable_expr nonassignable_expr callable_expr noncallable_expr non_expr_stmt assign_stmt while_stmt if_stmt return_stmt
     args maybe_args_array args_array primary primitive
-    int float this general_id
+    int float string char super this general_id
 
 %%
     program:
@@ -325,6 +328,8 @@ use crate::ShipFeature;
             $$ = Value::new_callable_expr(self.src(), ShipCallableExprAll::MemberAccess($<ShipMemberAccessExpr>1));
         } | this {
             $$ = Value::new_callable_expr(self.src(), ShipCallableExprAll::This($<ShipThis>1));
+        } | super {
+            $$ = Value::new_callable_expr(self.src(), ShipCallableExprAll::Super($<ShipSuper>1));
         } | class_id {
             $$ = Value::new_callable_expr(self.src(), ShipCallableExprAll::Cons($<ShipId>1));
         }
@@ -335,6 +340,8 @@ use crate::ShipFeature;
         } | primitive {
             $$ = Value::None;
         } | this {
+            $$ = Value::None;
+        } | super {
             $$ = Value::None;
         } | class_cast {
             $$ = Value::None;
@@ -370,6 +377,10 @@ use crate::ShipFeature;
             $$ = Value::new_primary(self.src(), ShipPrimaryAll::Int($<ShipInt>1));
         } | float {
             $$ = Value::new_primary(self.src(), ShipPrimaryAll::Float($<ShipFloat>1));
+        } | string {
+            $$ = Value::new_primary(self.src(), ShipPrimaryAll::String($<ShipString>1));
+        } | char {
+            $$ = Value::new_primary(self.src(), ShipPrimaryAll::Char($<ShipChar>1));
         }
 
     primary:
@@ -502,9 +513,27 @@ use crate::ShipFeature;
             $$ = Value::new_float(self.src(), $<Token>1);
         }
 
+    string:
+        tSTRING {
+            self.check_feature(*@1, ShipFeature::String);
+            $$ = Value::new_string(self.src(), $<Token>1);
+        }
+
+    char:
+        tCHAR {
+            self.check_feature(*@1, ShipFeature::String);
+            $$ = Value::new_char(self.src(), $<Token>1);
+        }
+
     this:
         kTHIS {
             $$ = Value::new_this(self.src(), $<Token>1);
+        }
+
+    super:
+        kSUPER {
+            self.check_feature(*@1, ShipFeature::SuperKeyword);
+            $$ = Value::new_super(self.src(), $<Token>1);
         }
 
     general_id:

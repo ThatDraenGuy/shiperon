@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Display};
+use std::fmt::{Debug, Display, Write};
 
 use crate::{
     TokenRegistry,
@@ -13,6 +13,7 @@ pub enum TokenValue {
     Int(i32),
     Float(f32),
     String(String),
+    Char(char),
 }
 
 impl Debug for TokenValue {
@@ -22,6 +23,7 @@ impl Debug for TokenValue {
             Self::Int(i) => f.write_str(&format!("{i}")),
             Self::Float(fl) => f.write_str(&format!("{fl}")),
             Self::String(s) => f.write_str(s),
+            Self::Char(c) => f.write_char(*c),
         }
     }
 }

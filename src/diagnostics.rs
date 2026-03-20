@@ -1,7 +1,4 @@
-use std::{
-    fmt::{Display, format},
-    rc::Rc,
-};
+use std::{fmt::Display, rc::Rc};
 
 use crate::{
     ByteSource, ShipFeature,

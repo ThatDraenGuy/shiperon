@@ -1,4 +1,4 @@
-use config::ConfigError;
+use config::{Config, ConfigError, Environment};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -17,7 +17,8 @@ pub struct FeatureFlags {
 
 impl CompilerConfig {
     pub fn new() -> Result<Self, ConfigError> {
-        todo!()
+        let config = Config::builder().add_source(Environment::with_prefix("SHIPERON")).build()?;
+        config.try_deserialize()
     }
 }
 
@@ -25,12 +26,7 @@ impl Default for CompilerConfig {
     fn default() -> Self {
         Self {
             debug: false,
-            features: FeatureFlags {
-                class_casting: true,
-                string: false,
-                io: false,
-                super_kw: false,
-            },
+            features: FeatureFlags { class_casting: true, string: true, io: false, super_kw: true },
         }
     }
 }

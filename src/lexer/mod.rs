@@ -98,6 +98,86 @@ impl<'src, S: ByteSource<'src>> Lexer<'src, S> {
         Ok(buf)
     }
 
+    //TODO proper error reporting
+    fn read_char_literal(&mut self) -> LexResult<Token> {
+        self.next()?;
+        let result = match self.next_maybe()? {
+            Some(b'\'') => {
+                return Ok(self.token(TokenRegistry::YYUNDEF, TokenValue::String("''".to_owned())));
+            },
+            Some(b'\\') => match self.next_maybe()? {
+                Some(b'n') => '\n',
+                Some(b't') => '\t',
+                Some(b'\\') => '\\',
+                Some(b) => {
+                    return Ok(self.token(
+                        TokenRegistry::YYUNDEF,
+                        TokenValue::String(format!("'\\{}", b as char)),
+                    ));
+                },
+                None => {
+                    return Ok(
+                        self.token(TokenRegistry::YYUNDEF, TokenValue::String("'\\".to_owned()))
+                    );
+                },
+            },
+            Some(b) => b as char,
+            None => {
+                return Ok(self.token(TokenRegistry::YYUNDEF, TokenValue::String("'".to_owned())));
+            },
+        };
+
+        if let Some(b'\'') = self.peek_maybe()? {
+            self.next_maybe()?;
+            Ok(self.token(TokenRegistry::tCHAR, TokenValue::Char(result)))
+        } else {
+            Ok(self.token(TokenRegistry::YYUNDEF, TokenValue::String(format!("'{result}"))))
+        }
+    }
+
+    //TODO proper error reporting
+    fn read_string_literal(&mut self) -> LexResult<Token> {
+        self.next()?;
+        let mut string: Vec<u8> = vec![];
+        let mut is_escaped = false;
+        loop {
+            match is_escaped {
+                true => {
+                    match self.next_maybe()? {
+                        Some(b @ b'"') | Some(b @ b'\\') => {
+                            string.push(b);
+                        },
+                        Some(b'n') => string.push(b'\n'),
+                        Some(b't') => string.push(b'\t'),
+                        //think - other escape seqs?
+                        Some(b) => {
+                            string.push(b'\\');
+                            string.push(b);
+                        },
+                        None => return Err(self.empty_token(TokenRegistry::YYUNDEF)), //TODO proper malformed error
+                    };
+                    is_escaped = false;
+                },
+                false => {
+                    match self.next_maybe()? {
+                        Some(b'"') => break,
+                        Some(b'\\') => is_escaped = true,
+                        Some(b) => string.push(b),
+                        None => return Err(self.empty_token(TokenRegistry::YYUNDEF)), //TODO proper malformed error
+                    };
+                },
+            }
+        }
+
+        Ok(self.token(
+            TokenRegistry::tSTRING,
+            TokenValue::String(
+                String::from_utf8(string)
+                    .map_err(|_e| self.make_err("Invalid UTF-8 encountered"))?,
+            ),
+        ))
+    }
+
     fn read_symbolic(&mut self) -> LexResult<Token> {
         Ok(match self.next()? {
             b'.' => self.empty_token(TokenRegistry::tDOT),
@@ -143,6 +223,7 @@ impl<'src, S: ByteSource<'src>> Lexer<'src, S> {
             "else" => self.empty_token(TokenRegistry::kELSE),
             "return" => self.empty_token(TokenRegistry::kRETURN),
             "as" => self.empty_token(TokenRegistry::kAS),
+            "super" => self.empty_token(TokenRegistry::kSUPER),
             _ => self.token(TokenRegistry::tIDENTIFIER, TokenValue::String(string)),
         })
     }
@@ -214,6 +295,8 @@ impl<'src, S: ByteSource<'src>> Lexer<'src, S> {
         match self.peek()? {
             b if b.is_ascii_alphabetic() => self.read_keyword_or_id(),
             b if b.is_ascii_digit() || b == b'-' => self.read_numeric(),
+            b if b == b'"' => self.read_string_literal(),
+            b if b == b'\'' => self.read_char_literal(),
             _ => self.read_symbolic(),
         }
     }

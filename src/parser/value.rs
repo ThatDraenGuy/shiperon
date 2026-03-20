@@ -24,7 +24,10 @@ pub enum ParserValue<'src> {
     Id(Rc<ShipId<'src>>),
     Int(Rc<ShipInt<'src>>),
     Float(Rc<ShipFloat<'src>>),
+    String(Rc<ShipString<'src>>),
+    Char(Rc<ShipChar<'src>>),
     This(Rc<ShipThis<'src>>),
+    Super(Rc<ShipSuper<'src>>),
     Primary(ShipPrimaryAll<'src>),
     ArgsBuilder(Vec<ShipExprAll<'src>>),
     Args(Rc<ShipArgs<'src>>),
@@ -92,11 +95,38 @@ impl<'src> ShipFloat<'src> {
     }
 }
 
+impl<'src> ShipString<'src> {
+    pub fn from(value: ParserValue<'src>) -> Rc<Self> {
+        match value {
+            ParserValue::String(n) => n,
+            other => unreachable!("expected String, got {:?}", other),
+        }
+    }
+}
+
+impl<'src> ShipChar<'src> {
+    pub fn from(value: ParserValue<'src>) -> Rc<Self> {
+        match value {
+            ParserValue::Char(n) => n,
+            other => unreachable!("expected Char, got {:?}", other),
+        }
+    }
+}
+
 impl<'src> ShipThis<'src> {
     pub fn from(value: ParserValue<'src>) -> Rc<Self> {
         match value {
             ParserValue::This(n) => n,
             other => unreachable!("expected This, got {:?}", other),
+        }
+    }
+}
+
+impl<'src> ShipSuper<'src> {
+    pub fn from(value: ParserValue<'src>) -> Rc<Self> {
+        match value {
+            ParserValue::Super(n) => n,
+            other => unreachable!("expected Super, got {:?}", other),
         }
     }
 }
@@ -421,12 +451,32 @@ impl<'src> ParserValue<'src> {
             TokenValue::Float(float) => {
                 Self::Float(ShipFloat::new(FloatData { float }, token.loc, src))
             },
-            other => unreachable!("expected Integer, got {:?}", other),
+            other => unreachable!("expected Float, got {:?}", other),
+        }
+    }
+
+    pub fn new_string(src: &impl ByteSource<'src>, token: Token) -> Self {
+        match token.token_value {
+            TokenValue::String(string) => {
+                Self::String(ShipString::new(StringData { string }, token.loc, src))
+            },
+            other => unreachable!("expected String, got {:?}", other),
+        }
+    }
+
+    pub fn new_char(src: &impl ByteSource<'src>, token: Token) -> Self {
+        match token.token_value {
+            TokenValue::Char(char) => Self::Char(ShipChar::new(CharData { char }, token.loc, src)),
+            other => unreachable!("expected Char, got {:?}", other),
         }
     }
 
     pub fn new_this(src: &impl ByteSource<'src>, token: Token) -> Self {
         Self::This(ShipThis::new(ThisData {}, token.loc, src))
+    }
+
+    pub fn new_super(src: &impl ByteSource<'src>, token: Token) -> Self {
+        Self::Super(ShipSuper::new(SuperData {}, token.loc, src))
     }
 
     pub fn new_primary(_src: &impl ByteSource<'src>, primary: ShipPrimaryAll<'src>) -> Self {

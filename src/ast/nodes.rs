@@ -281,6 +281,7 @@ impl<'src> Display for ShipAssignableExprAll<'src> {
 pub enum ShipCallableExprAll<'src> {
     MemberAccess(Rc<ShipMemberAccessExpr<'src>>),
     This(Rc<ShipThis<'src>>),
+    Super(Rc<ShipSuper<'src>>),
     Cons(Rc<ShipId<'src>>),
 }
 impl<'src> WithParserLoc for ShipCallableExprAll<'src> {
@@ -288,6 +289,7 @@ impl<'src> WithParserLoc for ShipCallableExprAll<'src> {
         match self {
             ShipCallableExprAll::MemberAccess(node) => node.loc(),
             ShipCallableExprAll::This(node) => node.loc(),
+            ShipCallableExprAll::Super(node) => node.loc(),
             ShipCallableExprAll::Cons(node) => node.loc(),
         }
     }
@@ -297,6 +299,7 @@ impl<'src> Display for ShipCallableExprAll<'src> {
         match self {
             ShipCallableExprAll::MemberAccess(node) => node.fmt(f),
             ShipCallableExprAll::This(node) => node.fmt(f),
+            ShipCallableExprAll::Super(node) => node.fmt(f),
             ShipCallableExprAll::Cons(node) => node.fmt(f),
         }
     }
@@ -353,6 +356,8 @@ pub type ShipArgs<'src> = Node<'src, ArgsData<'src>>;
 pub enum ShipPrimaryAll<'src> {
     Int(Rc<ShipInt<'src>>),
     Float(Rc<ShipFloat<'src>>),
+    String(Rc<ShipString<'src>>),
+    Char(Rc<ShipChar<'src>>),
     This(Rc<ShipThis<'src>>),
     Id(Rc<ShipId<'src>>),
 }
@@ -361,6 +366,8 @@ impl<'src> WithParserLoc for ShipPrimaryAll<'src> {
         match self {
             ShipPrimaryAll::Int(node) => node.loc(),
             ShipPrimaryAll::Float(node) => node.loc(),
+            ShipPrimaryAll::String(node) => node.loc(),
+            ShipPrimaryAll::Char(node) => node.loc(),
             ShipPrimaryAll::This(node) => node.loc(),
             ShipPrimaryAll::Id(node) => node.loc(),
         }
@@ -372,6 +379,8 @@ impl<'src> Display for ShipPrimaryAll<'src> {
         match self {
             ShipPrimaryAll::Int(node) => node.fmt(f),
             ShipPrimaryAll::Float(node) => node.fmt(f),
+            ShipPrimaryAll::String(node) => node.fmt(f),
+            ShipPrimaryAll::Char(node) => node.fmt(f),
             ShipPrimaryAll::This(node) => node.fmt(f),
             ShipPrimaryAll::Id(node) => node.fmt(f),
         }
@@ -401,6 +410,28 @@ impl NodeData for FloatData {
 pub type ShipFloat<'src> = Node<'src, FloatData>;
 
 #[derive(Debug, Clone, Serialize)]
+pub struct StringData {
+    pub string: String,
+}
+impl NodeData for StringData {
+    fn name() -> &'static str {
+        "String"
+    }
+}
+pub type ShipString<'src> = Node<'src, StringData>;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CharData {
+    pub char: char,
+}
+impl NodeData for CharData {
+    fn name() -> &'static str {
+        "Char"
+    }
+}
+pub type ShipChar<'src> = Node<'src, CharData>;
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ThisData {}
 impl NodeData for ThisData {
     fn name() -> &'static str {
@@ -408,6 +439,15 @@ impl NodeData for ThisData {
     }
 }
 pub type ShipThis<'src> = Node<'src, ThisData>;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SuperData {}
+impl NodeData for SuperData {
+    fn name() -> &'static str {
+        "Super"
+    }
+}
+pub type ShipSuper<'src> = Node<'src, SuperData>;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct IdData {
