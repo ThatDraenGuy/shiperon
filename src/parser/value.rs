@@ -31,6 +31,8 @@ pub enum ParserValue<'src> {
     Args(Rc<ShipArgs<'src>>),
     MethodCallExpr(Rc<ShipMethodCallExpr<'src>>),
     MemberAccessExpr(Rc<ShipMemberAccessExpr<'src>>),
+    AssignableExpr(ShipAssignableExprAll<'src>),
+    CallableExpr(ShipCallableExprAll<'src>),
     Expr(ShipExprAll<'src>),
     BodyBuilder(Vec<ShipBodyMemberAll<'src>>),
     Body(Rc<ShipBody<'src>>),
@@ -140,6 +142,24 @@ impl<'src> ShipConsCallExpr<'src> {
         match value {
             ParserValue::ConsCallExpr(n) => n,
             other => unreachable!("expected ConsCallExpr, got {:?}", other),
+        }
+    }
+}
+
+impl<'src> ShipAssignableExprAll<'src> {
+    pub fn from(value: ParserValue<'src>) -> Self {
+        match value {
+            ParserValue::AssignableExpr(e) => e,
+            other => unreachable!("expected AssignableExpr, got {:?}", other),
+        }
+    }
+}
+
+impl<'src> ShipCallableExprAll<'src> {
+    pub fn from(value: ParserValue<'src>) -> Self {
+        match value {
+            ParserValue::CallableExpr(e) => e,
+            other => unreachable!("expected CallableExpr, got {:?}", other),
         }
     }
 }
@@ -440,11 +460,25 @@ impl<'src> ParserValue<'src> {
 
     pub fn new_method_call(
         src: &impl ByteSource<'src>,
-        expr: ShipExprAll<'src>,
+        expr: ShipCallableExprAll<'src>,
         args: Rc<ShipArgs<'src>>,
     ) -> Self {
         let loc = ParserLoc::merge_from(&expr, args.as_ref());
         Self::MethodCallExpr(ShipMethodCallExpr::new(MethodCallExprData { expr, args }, loc, src))
+    }
+
+    pub fn new_assignable_expr(
+        _src: &impl ByteSource<'src>,
+        expr: ShipAssignableExprAll<'src>,
+    ) -> Self {
+        Self::AssignableExpr(expr)
+    }
+
+    pub fn new_callable_expr(
+        _src: &impl ByteSource<'src>,
+        expr: ShipCallableExprAll<'src>,
+    ) -> Self {
+        Self::CallableExpr(expr)
     }
 
     pub fn new_expr(_src: &impl ByteSource<'src>, expr: ShipExprAll<'src>) -> Self {
@@ -470,7 +504,7 @@ impl<'src> ParserValue<'src> {
     pub fn new_assign_stmt(
         src: &impl ByteSource<'src>,
         loc: ParserLoc,
-        target: ShipExprAll<'src>,
+        target: ShipAssignableExprAll<'src>,
         value: ShipExprAll<'src>,
     ) -> Self {
         Self::AssignStmt(ShipAssignStmt::new(AssignStmtData { target, value }, loc, src))
@@ -493,6 +527,15 @@ impl<'src> ParserValue<'src> {
         body: Rc<ShipBody<'src>>,
     ) -> Self {
         Self::WhileStmt(ShipWhileStmt::new(WhileStmtData { condition, body }, loc, src))
+    }
+
+    pub fn new_return_stmt(
+        src: &impl ByteSource<'src>,
+        loc: ParserLoc,
+        value: Option<ShipExprAll<'src>>,
+    ) -> (Self, Rc<ShipReturnStmt<'src>>) {
+        let return_stmt = ShipReturnStmt::new(ReturnStmtData { value }, loc, src);
+        (Self::ReturnStmt(return_stmt.clone()), return_stmt)
     }
 
     pub fn handle_return_stmt(

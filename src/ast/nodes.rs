@@ -164,7 +164,6 @@ pub enum ShipStmtAll<'src> {
     If(Rc<ShipIfStmt<'src>>),
     Return(Rc<ShipReturnStmt<'src>>),
     MethodCall(Rc<ShipMethodCallExpr<'src>>),
-    ConsCall(Rc<ShipConsCallExpr<'src>>),
 }
 
 impl<'src> Display for ShipStmtAll<'src> {
@@ -175,14 +174,13 @@ impl<'src> Display for ShipStmtAll<'src> {
             ShipStmtAll::If(node) => format!("{node}"),
             ShipStmtAll::Return(node) => format!("{node}"),
             ShipStmtAll::MethodCall(node) => format!("{node}"),
-            ShipStmtAll::ConsCall(node) => format!("{node}"),
         })
     }
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AssignStmtData<'src> {
-    pub target: ShipExprAll<'src>,
+    pub target: ShipAssignableExprAll<'src>,
     pub value: ShipExprAll<'src>,
 }
 impl<'src> NodeData for AssignStmtData<'src> {
@@ -258,6 +256,53 @@ impl<'src> Display for ShipExprAll<'src> {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub enum ShipAssignableExprAll<'src> {
+    MemberAccess(Rc<ShipMemberAccessExpr<'src>>),
+    Variable(Rc<ShipId<'src>>),
+}
+impl<'src> WithParserLoc for ShipAssignableExprAll<'src> {
+    fn loc(&self) -> crate::parser::ParserLoc {
+        match self {
+            ShipAssignableExprAll::MemberAccess(node) => node.loc(),
+            ShipAssignableExprAll::Variable(node) => node.loc(),
+        }
+    }
+}
+impl<'src> Display for ShipAssignableExprAll<'src> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&match self {
+            ShipAssignableExprAll::MemberAccess(node) => format!("{node}"),
+            ShipAssignableExprAll::Variable(node) => format!("{node}"),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub enum ShipCallableExprAll<'src> {
+    MemberAccess(Rc<ShipMemberAccessExpr<'src>>),
+    This(Rc<ShipThis<'src>>),
+    Cons(Rc<ShipId<'src>>),
+}
+impl<'src> WithParserLoc for ShipCallableExprAll<'src> {
+    fn loc(&self) -> crate::parser::ParserLoc {
+        match self {
+            ShipCallableExprAll::MemberAccess(node) => node.loc(),
+            ShipCallableExprAll::This(node) => node.loc(),
+            ShipCallableExprAll::Cons(node) => node.loc(),
+        }
+    }
+}
+impl<'src> Display for ShipCallableExprAll<'src> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ShipCallableExprAll::MemberAccess(node) => node.fmt(f),
+            ShipCallableExprAll::This(node) => node.fmt(f),
+            ShipCallableExprAll::Cons(node) => node.fmt(f),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct ConsCallExprData<'src> {
     pub class_id: Rc<ShipId<'src>>,
     pub args: Rc<ShipArgs<'src>>,
@@ -283,7 +328,7 @@ pub type ShipMemberAccessExpr<'src> = Node<'src, MemberAccessExprData<'src>>;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MethodCallExprData<'src> {
-    pub expr: ShipExprAll<'src>,
+    pub expr: ShipCallableExprAll<'src>,
     pub args: Rc<ShipArgs<'src>>,
 }
 impl<'src> NodeData for MethodCallExprData<'src> {

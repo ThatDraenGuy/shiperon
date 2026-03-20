@@ -47,6 +47,7 @@ use crate::diagnostics::*;
     kTHEN       "then"
     kELSE       "else"
     kRETURN     "return"
+    kAS         "as"
 
 %token
     tIDENTIFIER "identifier"
@@ -68,8 +69,8 @@ use crate::diagnostics::*;
     constructor_def
     method_def method_decl method_body method_id params maybe_param_array param_array param
     body maybe_body_members body_members body_member
-    param_id type_id expr stmt constructor_call member_access method_call
-    assign_stmt while_stmt if_stmt return_stmt
+    param_id type_id expr stmt member_access method_call
+    assignable_expr callable_expr non_expr_stmt assign_stmt while_stmt if_stmt return_stmt
     args maybe_args_array args_array primary
     int float this general_id
 
@@ -279,8 +280,8 @@ use crate::diagnostics::*;
             $$ = $1;
         } | maybe_body_members return_stmt {
             let mut body = $<BodyBuilder>1;
-            let mut body2 = $<BodyBuilder>2;
-            body.append(&mut body2);
+            let member = ShipBodyMemberAll::Stmt(ShipStmtAll::Return($<ShipReturnStmt>2));
+            body.push(member);
             $$ = Value::new_body_builder(body);
         }
 
@@ -319,12 +320,25 @@ use crate::diagnostics::*;
             $$ = Value::new_expr(self.src(), ShipExprAll::MethodCall($<ShipMethodCallExpr>1));
         } | primary {
             $$ = Value::new_expr(self.src(), ShipExprAll::Primary($<ShipPrimaryAll>1));
+        } | expr kAS class_id {
+            //TODO
         }
 
-    /* constructor_call:
-        class_id args {
-            $$ = Value::new_expr_constructor_call($<Id>1, $<Args>2);
-        } */
+    callable_expr:
+        member_access {
+            $$ = Value::new_callable_expr(self.src(), ShipCallableExprAll::MemberAccess($<ShipMemberAccessExpr>1));
+        } | this {
+            $$ = Value::new_callable_expr(self.src(), ShipCallableExprAll::This($<ShipThis>1));
+        } | class_id {
+            $$ = Value::new_callable_expr(self.src(), ShipCallableExprAll::Cons($<ShipId>1));
+        } //TODO errors
+
+    assignable_expr:
+        member_access {
+            $$ = Value::new_assignable_expr(self.src(), ShipAssignableExprAll::MemberAccess($<ShipMemberAccessExpr>1));
+        } | var_id {
+            $$ = Value::new_assignable_expr(self.src(), ShipAssignableExprAll::Variable($<ShipId>1));
+        } //TODO errors
 
     member_access:
         expr tDOT var_id {
@@ -332,8 +346,8 @@ use crate::diagnostics::*;
         }
 
     method_call:
-        expr args {
-            $$ = Value::new_method_call(self.src(), $<ShipExprAll>1, $<ShipArgs>2);
+        callable_expr args {
+            $$ = Value::new_method_call(self.src(), $<ShipCallableExprAll>1, $<ShipArgs>2);
         }
 
     primary:
@@ -343,7 +357,8 @@ use crate::diagnostics::*;
             $$ = Value::new_primary(self.src(), ShipPrimaryAll::Float($<ShipFloat>1));
         } | this {
             $$ = Value::new_primary(self.src(), ShipPrimaryAll::This($<ShipThis>1));
-        } | general_id {
+        }
+        | var_id {
             $$ = Value::new_primary(self.src(), ShipPrimaryAll::Id($<ShipId>1));
         }
 
@@ -376,6 +391,14 @@ use crate::diagnostics::*;
         }
 
     stmt:
+        non_expr_stmt {
+            $$ = $1;
+        }
+        | method_call {
+            $$ = Value::new_stmt(self.src(), ShipStmtAll::MethodCall($<ShipMethodCallExpr>1));
+        }
+
+    non_expr_stmt:
         assign_stmt {
             $$ = Value::new_stmt(self.src(), ShipStmtAll::Assign($<ShipAssignStmt>1));
         } | while_stmt {
@@ -385,11 +408,10 @@ use crate::diagnostics::*;
         }
 
     assign_stmt:
-        expr tASSIGN expr {
-            let left = $<ShipExprAll>1;
+        assignable_expr tASSIGN expr {
+            let left = $<ShipAssignableExprAll>1;
             let right = $<ShipExprAll>3;
-            let loc = Loc::merge_from(&left, &right);
-            $$ = Value::new_assign_stmt(self.src(), loc, left, right);
+            $$ = Value::new_assign_stmt(self.src(), Loc::merge(*@1, *@3), left, right);
         }
 
     while_stmt:
@@ -437,34 +459,20 @@ use crate::diagnostics::*;
         }
 
     return_stmt:
-        kRETURN body {
-            let loc = $<Token>1.loc();
-            let afters = $<BodyBuilder>2;
-            let afters_exist = !afters.is_empty();
-            let return_stmt = ShipReturnStmt::new(
-                ReturnStmtData { value: Option::None },
-                loc,
-                self.src(),
-            );
-            $$ = Value::handle_return_stmt(return_stmt.clone(), afters);
-            if afters_exist {
-                self.register_warn(*@2, Reason::BodyMembersAfterReturn{ return_stmt });
-            }
-        }| kRETURN expr body {
-            let kreturn = $<Token>1;
-            let expr = $<ShipExprAll>2;
+        kRETURN {
+            $$ = Value::new_return_stmt(self.src(), *@1, Option::None).0;
+        } | kRETURN expr body {
+            let (value, return_stmt) = Value::new_return_stmt(self.src(), Loc::merge(*@1, *@2), Option::Some($<ShipExprAll>2));
+            $$ = value;
+
             let afters = $<BodyBuilder>3;
-            let afters_exist = !afters.is_empty();
-            let loc = Loc::merge_from(&kreturn, &expr);
-            let return_stmt = ShipReturnStmt::new(
-                ReturnStmtData { value: Option::Some(expr) },
-                loc,
-                self.src(),
-            );
-            $$ = Value::handle_return_stmt(return_stmt.clone(), afters);
-            if afters_exist {
+            if !afters.is_empty() {
                 self.register_warn(*@3, Reason::BodyMembersAfterReturn{ return_stmt });
             }
+        } | kRETURN non_expr_stmt body {
+            let (value, return_stmt) = Value::new_return_stmt(self.src(), *@1, Option::None);
+            $$ = value;
+            self.register_warn(Loc::merge(*@2, *@3), Reason::BodyMembersAfterReturn{ return_stmt });
         }
 
     int:
