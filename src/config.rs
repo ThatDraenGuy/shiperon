@@ -1,4 +1,3 @@
-use config::{Config, ConfigError, Environment};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -13,13 +12,6 @@ pub struct FeatureFlags {
     pub io: bool,
     pub string: bool,
     pub super_kw: bool,
-}
-
-impl CompilerConfig {
-    pub fn new() -> Result<Self, ConfigError> {
-        let config = Config::builder().add_source(Environment::with_prefix("SHIPERON")).build()?;
-        config.try_deserialize()
-    }
 }
 
 impl Default for CompilerConfig {

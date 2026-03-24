@@ -295,8 +295,8 @@ impl<'src, S: ByteSource<'src>> Lexer<'src, S> {
         match self.peek()? {
             b if b.is_ascii_alphabetic() => self.read_keyword_or_id(),
             b if b.is_ascii_digit() || b == b'-' => self.read_numeric(),
-            b if b == b'"' => self.read_string_literal(),
-            b if b == b'\'' => self.read_char_literal(),
+            b'"' => self.read_string_literal(),
+            b'\'' => self.read_char_literal(),
             _ => self.read_symbolic(),
         }
     }
