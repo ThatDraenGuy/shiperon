@@ -104,6 +104,8 @@ use crate::ShipFeature;
             $$ = Value::new_class_defs_builder(classes);
         } | class_defs error {
             $$ = $1;
+        } | error {
+            $$ = Value::new_class_defs_builder(vec![]);
         }
 
     class_def:
@@ -142,6 +144,8 @@ use crate::ShipFeature;
             $$ = Value::new_class_members_builder(members);
         } | class_members error {
             $$ = $1;
+        } | error {
+            $$ = Value::new_class_members_builder(vec![]);
         }
 
     class_member:
@@ -159,6 +163,12 @@ use crate::ShipFeature;
             let expr = $<ShipExprAll>4;
             let loc = Loc::merge_from(&kvar, &expr);
             $$ = Value::new_var_def(self.src(), loc, $<ShipId>2, expr);
+        } | kVAR var_id tASSIGN expr {
+            let kvar = $<Token>1;
+            let expr = $<ShipExprAll>4;
+            let loc = Loc::merge_from(&kvar, &expr);
+            $$ = Value::new_var_def(self.src(), loc, $<ShipId>2, expr);
+            self.register_error(*@3, Reason::AssignOnVarDef);
         }
 
     var_id:
@@ -228,12 +238,14 @@ use crate::ShipFeature;
     param_array:
         param {
             $$ = Value::new_params_builder(vec![$<ShipParam>1]);
-        } | params tCOMMA param {
+        } | param_array tCOMMA param {
             let mut params = $<ParamsBuilder>1;
             params.push($<ShipParam>3);
             $$ = Value::new_params_builder(params);
-        } | params error {
+        } | param_array error {
             $$ = $1;
+        } | error {
+            $$ = Value::new_params_builder(vec![]);
         }
 
     param:
@@ -291,9 +303,10 @@ use crate::ShipFeature;
             let mut body = $<BodyBuilder>1;
             body.push($<ShipBodyMemberAll>2);
             $$ = Value::new_body_builder(body);
-        }
-        | body_members error {
+        } | body_members error {
             $$ = $1;
+        } | error {
+            $$ = Value::new_body_builder(vec![]);
         }
 
     body_member:
@@ -414,6 +427,8 @@ use crate::ShipFeature;
             $$ = Value::new_args_builder(args);
         } | args_array error {
             $$ = $1;
+        } | error {
+            $$ = Value::new_args_builder(vec![]);
         }
 
     stmt:

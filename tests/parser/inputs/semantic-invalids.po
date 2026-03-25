@@ -1,0 +1,46 @@
+class Base is
+end
+
+class Derived extends Base is
+end
+
+class DoublyDerived extends Derived is
+end
+
+class NotDerived is
+end
+
+class Program is
+    method IncorrectReturn(): Boolean => 1
+    method IncorrectReturn2(): Integer is
+        return true
+    end
+    method IncorrectReturn3() is
+        return 1.0
+    end
+    method IncorrectReturn4(): real is
+        return
+    end
+
+    method IntOnly(num: Integer) is
+    end
+
+    method TakeBase(item: Base) is
+    end
+
+    method DerivedOnly(item: Derived) is
+    end
+
+    this() is
+        IntOnly(true) // incorrect argument type
+
+        TakeBase(Base()) // ok
+        TakeBase(Derived()) // ok
+        TakeBase(DoublyDerived()) // ok
+        TakeBase(NotDerived()) // incorrect argument type
+
+        DerivedOnly(Derived()) // ok
+        DerivedOnly(DoublyDerived()) // ok
+        DerivedOnly(Base()) // incorrect argument type
+    end
+end

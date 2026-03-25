@@ -1,0 +1,501 @@
+---
+source: tests/parser/mod.rs
+expression: result
+input_file: tests/parser/inputs/invalid.po
+---
+ast: |-
+  Some((
+      raw_loc: "000..330",
+      start: "Ln 1, Col 1",
+      end: "Ln 15, Col 4",
+      src: "class Program is\n    method stuff() is\n        var sum: Integer(0)\n        var limit: Integer(10);\n        var i: 0!\n        while i.Less(limit) loop\n            if i.Rem(2).Equal(0) then\n                sum := sum.Plus(i)\n            end\n        end\n        i.Rem(2) := 3\n        return sum\n        sum := sum.Plus(2)\n    end\nend",
+      data: (
+          classes: [
+              (
+                  raw_loc: "000..330",
+                  start: "Ln 1, Col 1",
+                  end: "Ln 15, Col 4",
+                  src: "class Program is\n    method stuff() is\n        var sum: Integer(0)\n        var limit: Integer(10);\n        var i: 0!\n        while i.Less(limit) loop\n            if i.Rem(2).Equal(0) then\n                sum := sum.Plus(i)\n            end\n        end\n        i.Rem(2) := 3\n        return sum\n        sum := sum.Plus(2)\n    end\nend",
+                  data: (
+                      class_id: (
+                          raw_loc: "006..013",
+                          start: "Ln 1, Col 7",
+                          end: "Ln 1, Col 14",
+                          src: "Program",
+                          data: (
+                              id: "Program",
+                          ),
+                      ),
+                      parent_id: None,
+                      members: [
+                          MethodDef((
+                              raw_loc: "021..326",
+                              start: "Ln 2, Col 5",
+                              end: "Ln 14, Col 8",
+                              src: "method stuff() is\n        var sum: Integer(0)\n        var limit: Integer(10);\n        var i: 0!\n        while i.Less(limit) loop\n            if i.Rem(2).Equal(0) then\n                sum := sum.Plus(i)\n            end\n        end\n        i.Rem(2) := 3\n        return sum\n        sum := sum.Plus(2)\n    end",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "028..033",
+                                      start: "Ln 2, Col 12",
+                                      end: "Ln 2, Col 17",
+                                      src: "stuff",
+                                      data: (
+                                          id: "stuff",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "033..035",
+                                      start: "Ln 2, Col 17",
+                                      end: "Ln 2, Col 19",
+                                      src: "()",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  return_type: None,
+                                  body: Some(Body((
+                                      raw_loc: "036..326",
+                                      start: "Ln 2, Col 20",
+                                      end: "Ln 14, Col 8",
+                                      src: "is\n        var sum: Integer(0)\n        var limit: Integer(10);\n        var i: 0!\n        while i.Less(limit) loop\n            if i.Rem(2).Equal(0) then\n                sum := sum.Plus(i)\n            end\n        end\n        i.Rem(2) := 3\n        return sum\n        sum := sum.Plus(2)\n    end",
+                                      data: (
+                                          members: [
+                                              VarDef((
+                                                  raw_loc: "047..066",
+                                                  start: "Ln 3, Col 9",
+                                                  end: "Ln 3, Col 28",
+                                                  src: "var sum: Integer(0)",
+                                                  data: (
+                                                      var_id: (
+                                                          raw_loc: "051..054",
+                                                          start: "Ln 3, Col 13",
+                                                          end: "Ln 3, Col 16",
+                                                          src: "sum",
+                                                          data: (
+                                                              id: "sum",
+                                                          ),
+                                                      ),
+                                                      expr: MethodCall((
+                                                          raw_loc: "056..066",
+                                                          start: "Ln 3, Col 18",
+                                                          end: "Ln 3, Col 28",
+                                                          src: "Integer(0)",
+                                                          data: (
+                                                              expr: Cons((
+                                                                  raw_loc: "056..063",
+                                                                  start: "Ln 3, Col 18",
+                                                                  end: "Ln 3, Col 25",
+                                                                  src: "Integer",
+                                                                  data: (
+                                                                      id: "Integer",
+                                                                  ),
+                                                              )),
+                                                              args: (
+                                                                  raw_loc: "063..066",
+                                                                  start: "Ln 3, Col 25",
+                                                                  end: "Ln 3, Col 28",
+                                                                  src: "(0)",
+                                                                  data: (
+                                                                      exprs: [
+                                                                          Primary(Int((
+                                                                              raw_loc: "064..065",
+                                                                              start: "Ln 3, Col 26",
+                                                                              end: "Ln 3, Col 27",
+                                                                              src: "0",
+                                                                              data: (
+                                                                                  int: 0,
+                                                                              ),
+                                                                          ))),
+                                                                      ],
+                                                                  ),
+                                                              ),
+                                                          ),
+                                                      )),
+                                                  ),
+                                              )),
+                                              VarDef((
+                                                  raw_loc: "075..097",
+                                                  start: "Ln 4, Col 9",
+                                                  end: "Ln 4, Col 31",
+                                                  src: "var limit: Integer(10)",
+                                                  data: (
+                                                      var_id: (
+                                                          raw_loc: "079..084",
+                                                          start: "Ln 4, Col 13",
+                                                          end: "Ln 4, Col 18",
+                                                          src: "limit",
+                                                          data: (
+                                                              id: "limit",
+                                                          ),
+                                                      ),
+                                                      expr: MethodCall((
+                                                          raw_loc: "086..097",
+                                                          start: "Ln 4, Col 20",
+                                                          end: "Ln 4, Col 31",
+                                                          src: "Integer(10)",
+                                                          data: (
+                                                              expr: Cons((
+                                                                  raw_loc: "086..093",
+                                                                  start: "Ln 4, Col 20",
+                                                                  end: "Ln 4, Col 27",
+                                                                  src: "Integer",
+                                                                  data: (
+                                                                      id: "Integer",
+                                                                  ),
+                                                              )),
+                                                              args: (
+                                                                  raw_loc: "093..097",
+                                                                  start: "Ln 4, Col 27",
+                                                                  end: "Ln 4, Col 31",
+                                                                  src: "(10)",
+                                                                  data: (
+                                                                      exprs: [
+                                                                          Primary(Int((
+                                                                              raw_loc: "094..096",
+                                                                              start: "Ln 4, Col 28",
+                                                                              end: "Ln 4, Col 30",
+                                                                              src: "10",
+                                                                              data: (
+                                                                                  int: 10,
+                                                                              ),
+                                                                          ))),
+                                                                      ],
+                                                                  ),
+                                                              ),
+                                                          ),
+                                                      )),
+                                                  ),
+                                              )),
+                                              VarDef((
+                                                  raw_loc: "107..115",
+                                                  start: "Ln 5, Col 9",
+                                                  end: "Ln 5, Col 17",
+                                                  src: "var i: 0",
+                                                  data: (
+                                                      var_id: (
+                                                          raw_loc: "111..112",
+                                                          start: "Ln 5, Col 13",
+                                                          end: "Ln 5, Col 14",
+                                                          src: "i",
+                                                          data: (
+                                                              id: "i",
+                                                          ),
+                                                      ),
+                                                      expr: Primary(Int((
+                                                          raw_loc: "114..115",
+                                                          start: "Ln 5, Col 16",
+                                                          end: "Ln 5, Col 17",
+                                                          src: "0",
+                                                          data: (
+                                                              int: 0,
+                                                          ),
+                                                      ))),
+                                                  ),
+                                              )),
+                                              Stmt(While((
+                                                  raw_loc: "125..250",
+                                                  start: "Ln 6, Col 9",
+                                                  end: "Ln 10, Col 12",
+                                                  src: "while i.Less(limit) loop\n            if i.Rem(2).Equal(0) then\n                sum := sum.Plus(i)\n            end\n        end",
+                                                  data: (
+                                                      condition: MethodCall((
+                                                          raw_loc: "131..144",
+                                                          start: "Ln 6, Col 15",
+                                                          end: "Ln 6, Col 28",
+                                                          src: "i.Less(limit)",
+                                                          data: (
+                                                              expr: MemberAccess((
+                                                                  raw_loc: "131..137",
+                                                                  start: "Ln 6, Col 15",
+                                                                  end: "Ln 6, Col 21",
+                                                                  src: "i.Less",
+                                                                  data: (
+                                                                      expr: Primary(Id((
+                                                                          raw_loc: "131..132",
+                                                                          start: "Ln 6, Col 15",
+                                                                          end: "Ln 6, Col 16",
+                                                                          src: "i",
+                                                                          data: (
+                                                                              id: "i",
+                                                                          ),
+                                                                      ))),
+                                                                      member_id: (
+                                                                          raw_loc: "133..137",
+                                                                          start: "Ln 6, Col 17",
+                                                                          end: "Ln 6, Col 21",
+                                                                          src: "Less",
+                                                                          data: (
+                                                                              id: "Less",
+                                                                          ),
+                                                                      ),
+                                                                  ),
+                                                              )),
+                                                              args: (
+                                                                  raw_loc: "137..144",
+                                                                  start: "Ln 6, Col 21",
+                                                                  end: "Ln 6, Col 28",
+                                                                  src: "(limit)",
+                                                                  data: (
+                                                                      exprs: [
+                                                                          Primary(Id((
+                                                                              raw_loc: "138..143",
+                                                                              start: "Ln 6, Col 22",
+                                                                              end: "Ln 6, Col 27",
+                                                                              src: "limit",
+                                                                              data: (
+                                                                                  id: "limit",
+                                                                              ),
+                                                                          ))),
+                                                                      ],
+                                                                  ),
+                                                              ),
+                                                          ),
+                                                      )),
+                                                      body: (
+                                                          raw_loc: "145..250",
+                                                          start: "Ln 6, Col 29",
+                                                          end: "Ln 10, Col 12",
+                                                          src: "loop\n            if i.Rem(2).Equal(0) then\n                sum := sum.Plus(i)\n            end\n        end",
+                                                          data: (
+                                                              members: [
+                                                                  Stmt(If((
+                                                                      raw_loc: "162..238",
+                                                                      start: "Ln 7, Col 13",
+                                                                      end: "Ln 9, Col 16",
+                                                                      src: "if i.Rem(2).Equal(0) then\n                sum := sum.Plus(i)\n            end",
+                                                                      data: (
+                                                                          condition: MethodCall((
+                                                                              raw_loc: "165..182",
+                                                                              start: "Ln 7, Col 16",
+                                                                              end: "Ln 7, Col 33",
+                                                                              src: "i.Rem(2).Equal(0)",
+                                                                              data: (
+                                                                                  expr: MemberAccess((
+                                                                                      raw_loc: "165..179",
+                                                                                      start: "Ln 7, Col 16",
+                                                                                      end: "Ln 7, Col 30",
+                                                                                      src: "i.Rem(2).Equal",
+                                                                                      data: (
+                                                                                          expr: MethodCall((
+                                                                                              raw_loc: "165..173",
+                                                                                              start: "Ln 7, Col 16",
+                                                                                              end: "Ln 7, Col 24",
+                                                                                              src: "i.Rem(2)",
+                                                                                              data: (
+                                                                                                  expr: MemberAccess((
+                                                                                                      raw_loc: "165..170",
+                                                                                                      start: "Ln 7, Col 16",
+                                                                                                      end: "Ln 7, Col 21",
+                                                                                                      src: "i.Rem",
+                                                                                                      data: (
+                                                                                                          expr: Primary(Id((
+                                                                                                              raw_loc: "165..166",
+                                                                                                              start: "Ln 7, Col 16",
+                                                                                                              end: "Ln 7, Col 17",
+                                                                                                              src: "i",
+                                                                                                              data: (
+                                                                                                                  id: "i",
+                                                                                                              ),
+                                                                                                          ))),
+                                                                                                          member_id: (
+                                                                                                              raw_loc: "167..170",
+                                                                                                              start: "Ln 7, Col 18",
+                                                                                                              end: "Ln 7, Col 21",
+                                                                                                              src: "Rem",
+                                                                                                              data: (
+                                                                                                                  id: "Rem",
+                                                                                                              ),
+                                                                                                          ),
+                                                                                                      ),
+                                                                                                  )),
+                                                                                                  args: (
+                                                                                                      raw_loc: "170..173",
+                                                                                                      start: "Ln 7, Col 21",
+                                                                                                      end: "Ln 7, Col 24",
+                                                                                                      src: "(2)",
+                                                                                                      data: (
+                                                                                                          exprs: [
+                                                                                                              Primary(Int((
+                                                                                                                  raw_loc: "171..172",
+                                                                                                                  start: "Ln 7, Col 22",
+                                                                                                                  end: "Ln 7, Col 23",
+                                                                                                                  src: "2",
+                                                                                                                  data: (
+                                                                                                                      int: 2,
+                                                                                                                  ),
+                                                                                                              ))),
+                                                                                                          ],
+                                                                                                      ),
+                                                                                                  ),
+                                                                                              ),
+                                                                                          )),
+                                                                                          member_id: (
+                                                                                              raw_loc: "174..179",
+                                                                                              start: "Ln 7, Col 25",
+                                                                                              end: "Ln 7, Col 30",
+                                                                                              src: "Equal",
+                                                                                              data: (
+                                                                                                  id: "Equal",
+                                                                                              ),
+                                                                                          ),
+                                                                                      ),
+                                                                                  )),
+                                                                                  args: (
+                                                                                      raw_loc: "179..182",
+                                                                                      start: "Ln 7, Col 30",
+                                                                                      end: "Ln 7, Col 33",
+                                                                                      src: "(0)",
+                                                                                      data: (
+                                                                                          exprs: [
+                                                                                              Primary(Int((
+                                                                                                  raw_loc: "180..181",
+                                                                                                  start: "Ln 7, Col 31",
+                                                                                                  end: "Ln 7, Col 32",
+                                                                                                  src: "0",
+                                                                                                  data: (
+                                                                                                      int: 0,
+                                                                                                  ),
+                                                                                              ))),
+                                                                                          ],
+                                                                                      ),
+                                                                                  ),
+                                                                              ),
+                                                                          )),
+                                                                          then_body: (
+                                                                              raw_loc: "183..238",
+                                                                              start: "Ln 7, Col 34",
+                                                                              end: "Ln 9, Col 16",
+                                                                              src: "then\n                sum := sum.Plus(i)\n            end",
+                                                                              data: (
+                                                                                  members: [
+                                                                                      Stmt(Assign((
+                                                                                          raw_loc: "204..222",
+                                                                                          start: "Ln 8, Col 17",
+                                                                                          end: "Ln 8, Col 35",
+                                                                                          src: "sum := sum.Plus(i)",
+                                                                                          data: (
+                                                                                              target: Variable((
+                                                                                                  raw_loc: "204..207",
+                                                                                                  start: "Ln 8, Col 17",
+                                                                                                  end: "Ln 8, Col 20",
+                                                                                                  src: "sum",
+                                                                                                  data: (
+                                                                                                      id: "sum",
+                                                                                                  ),
+                                                                                              )),
+                                                                                              value: MethodCall((
+                                                                                                  raw_loc: "211..222",
+                                                                                                  start: "Ln 8, Col 24",
+                                                                                                  end: "Ln 8, Col 35",
+                                                                                                  src: "sum.Plus(i)",
+                                                                                                  data: (
+                                                                                                      expr: MemberAccess((
+                                                                                                          raw_loc: "211..219",
+                                                                                                          start: "Ln 8, Col 24",
+                                                                                                          end: "Ln 8, Col 32",
+                                                                                                          src: "sum.Plus",
+                                                                                                          data: (
+                                                                                                              expr: Primary(Id((
+                                                                                                                  raw_loc: "211..214",
+                                                                                                                  start: "Ln 8, Col 24",
+                                                                                                                  end: "Ln 8, Col 27",
+                                                                                                                  src: "sum",
+                                                                                                                  data: (
+                                                                                                                      id: "sum",
+                                                                                                                  ),
+                                                                                                              ))),
+                                                                                                              member_id: (
+                                                                                                                  raw_loc: "215..219",
+                                                                                                                  start: "Ln 8, Col 28",
+                                                                                                                  end: "Ln 8, Col 32",
+                                                                                                                  src: "Plus",
+                                                                                                                  data: (
+                                                                                                                      id: "Plus",
+                                                                                                                  ),
+                                                                                                              ),
+                                                                                                          ),
+                                                                                                      )),
+                                                                                                      args: (
+                                                                                                          raw_loc: "219..222",
+                                                                                                          start: "Ln 8, Col 32",
+                                                                                                          end: "Ln 8, Col 35",
+                                                                                                          src: "(i)",
+                                                                                                          data: (
+                                                                                                              exprs: [
+                                                                                                                  Primary(Id((
+                                                                                                                      raw_loc: "220..221",
+                                                                                                                      start: "Ln 8, Col 33",
+                                                                                                                      end: "Ln 8, Col 34",
+                                                                                                                      src: "i",
+                                                                                                                      data: (
+                                                                                                                          id: "i",
+                                                                                                                      ),
+                                                                                                                  ))),
+                                                                                                              ],
+                                                                                                          ),
+                                                                                                      ),
+                                                                                                  ),
+                                                                                              )),
+                                                                                          ),
+                                                                                      ))),
+                                                                                  ],
+                                                                              ),
+                                                                          ),
+                                                                          else_body: None,
+                                                                      ),
+                                                                  ))),
+                                                              ],
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ))),
+                                              Stmt(Return((
+                                                  raw_loc: "281..291",
+                                                  start: "Ln 12, Col 9",
+                                                  end: "Ln 12, Col 19",
+                                                  src: "return sum",
+                                                  data: (
+                                                      value: Some(Primary(Id((
+                                                          raw_loc: "288..291",
+                                                          start: "Ln 12, Col 16",
+                                                          end: "Ln 12, Col 19",
+                                                          src: "sum",
+                                                          data: (
+                                                              id: "sum",
+                                                          ),
+                                                      )))),
+                                                  ),
+                                              ))),
+                                          ],
+                                      ),
+                                  ))),
+                              ),
+                          )),
+                      ],
+                  ),
+              ),
+          ],
+      ),
+  ))
+diagnostics: |-
+  Error at Ln 4, Col 31:
+  ;
+  ^
+  Unexpected token
+
+  Error at Ln 5, Col 17:
+  !
+  ^
+  Unexpected token
+
+  Error at Ln 11, Col 9:
+  i.Rem(2) := 3
+  ^
+  Expression is not assignable, but an assign is attempted
+
+  Warning at Ln 13, Col 9:
+  sum := sum.Plus(2)
+  ^
+  Unreachable code after return statement. Return originally invoked here:
+  Ln 12, Col 9:
+  return sum

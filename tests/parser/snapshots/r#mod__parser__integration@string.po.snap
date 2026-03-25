@@ -1,0 +1,168 @@
+---
+source: tests/parser/mod.rs
+expression: result
+input_file: tests/parser/inputs/string.po
+---
+ast: |-
+  Some((
+      raw_loc: "000..133",
+      start: "Ln 1, Col 1",
+      end: "Ln 8, Col 4",
+      src: "class Test is\n    this() is\n        var s : \"aboba\"\n        var c : \'v\'\n        var s2 : \"aboba\\n67\"\n        var c2: \'\\\\\'\n    end\nend",
+      data: (
+          classes: [
+              (
+                  raw_loc: "000..133",
+                  start: "Ln 1, Col 1",
+                  end: "Ln 8, Col 4",
+                  src: "class Test is\n    this() is\n        var s : \"aboba\"\n        var c : \'v\'\n        var s2 : \"aboba\\n67\"\n        var c2: \'\\\\\'\n    end\nend",
+                  data: (
+                      class_id: (
+                          raw_loc: "006..010",
+                          start: "Ln 1, Col 7",
+                          end: "Ln 1, Col 11",
+                          src: "Test",
+                          data: (
+                              id: "Test",
+                          ),
+                      ),
+                      parent_id: None,
+                      members: [
+                          ConsDef((
+                              raw_loc: "018..129",
+                              start: "Ln 2, Col 5",
+                              end: "Ln 7, Col 8",
+                              src: "this() is\n        var s : \"aboba\"\n        var c : \'v\'\n        var s2 : \"aboba\\n67\"\n        var c2: \'\\\\\'\n    end",
+                              data: (
+                                  params: (
+                                      raw_loc: "022..024",
+                                      start: "Ln 2, Col 9",
+                                      end: "Ln 2, Col 11",
+                                      src: "()",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  body: (
+                                      raw_loc: "025..129",
+                                      start: "Ln 2, Col 12",
+                                      end: "Ln 7, Col 8",
+                                      src: "is\n        var s : \"aboba\"\n        var c : \'v\'\n        var s2 : \"aboba\\n67\"\n        var c2: \'\\\\\'\n    end",
+                                      data: (
+                                          members: [
+                                              VarDef((
+                                                  raw_loc: "036..051",
+                                                  start: "Ln 3, Col 9",
+                                                  end: "Ln 3, Col 24",
+                                                  src: "var s : \"aboba\"",
+                                                  data: (
+                                                      var_id: (
+                                                          raw_loc: "040..041",
+                                                          start: "Ln 3, Col 13",
+                                                          end: "Ln 3, Col 14",
+                                                          src: "s",
+                                                          data: (
+                                                              id: "s",
+                                                          ),
+                                                      ),
+                                                      expr: Primary(String((
+                                                          raw_loc: "044..051",
+                                                          start: "Ln 3, Col 17",
+                                                          end: "Ln 3, Col 24",
+                                                          src: "\"aboba\"",
+                                                          data: (
+                                                              string: "aboba",
+                                                          ),
+                                                      ))),
+                                                  ),
+                                              )),
+                                              VarDef((
+                                                  raw_loc: "060..071",
+                                                  start: "Ln 4, Col 9",
+                                                  end: "Ln 4, Col 20",
+                                                  src: "var c : \'v\'",
+                                                  data: (
+                                                      var_id: (
+                                                          raw_loc: "064..065",
+                                                          start: "Ln 4, Col 13",
+                                                          end: "Ln 4, Col 14",
+                                                          src: "c",
+                                                          data: (
+                                                              id: "c",
+                                                          ),
+                                                      ),
+                                                      expr: Primary(Char((
+                                                          raw_loc: "068..071",
+                                                          start: "Ln 4, Col 17",
+                                                          end: "Ln 4, Col 20",
+                                                          src: "\'v\'",
+                                                          data: (
+                                                              char: 'v',
+                                                          ),
+                                                      ))),
+                                                  ),
+                                              )),
+                                              VarDef((
+                                                  raw_loc: "080..100",
+                                                  start: "Ln 5, Col 9",
+                                                  end: "Ln 5, Col 29",
+                                                  src: "var s2 : \"aboba\\n67\"",
+                                                  data: (
+                                                      var_id: (
+                                                          raw_loc: "084..086",
+                                                          start: "Ln 5, Col 13",
+                                                          end: "Ln 5, Col 15",
+                                                          src: "s2",
+                                                          data: (
+                                                              id: "s2",
+                                                          ),
+                                                      ),
+                                                      expr: Primary(String((
+                                                          raw_loc: "089..100",
+                                                          start: "Ln 5, Col 18",
+                                                          end: "Ln 5, Col 29",
+                                                          src: "\"aboba\\n67\"",
+                                                          data: (
+                                                              string: "aboba\n67",
+                                                          ),
+                                                      ))),
+                                                  ),
+                                              )),
+                                              VarDef((
+                                                  raw_loc: "109..121",
+                                                  start: "Ln 6, Col 9",
+                                                  end: "Ln 6, Col 21",
+                                                  src: "var c2: \'\\\\\'",
+                                                  data: (
+                                                      var_id: (
+                                                          raw_loc: "113..115",
+                                                          start: "Ln 6, Col 13",
+                                                          end: "Ln 6, Col 15",
+                                                          src: "c2",
+                                                          data: (
+                                                              id: "c2",
+                                                          ),
+                                                      ),
+                                                      expr: Primary(Char((
+                                                          raw_loc: "117..121",
+                                                          start: "Ln 6, Col 17",
+                                                          end: "Ln 6, Col 21",
+                                                          src: "\'\\\\\'",
+                                                          data: (
+                                                              char: '\\',
+                                                          ),
+                                                      ))),
+                                                  ),
+                                              )),
+                                          ],
+                                      ),
+                                  ),
+                              ),
+                          )),
+                      ],
+                  ),
+              ),
+          ],
+      ),
+  ))
+diagnostics: ''

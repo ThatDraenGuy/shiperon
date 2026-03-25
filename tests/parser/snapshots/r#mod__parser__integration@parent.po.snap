@@ -1,0 +1,309 @@
+---
+source: tests/parser/mod.rs
+expression: result
+input_file: tests/parser/inputs/parent.po
+---
+ast: |-
+  Some((
+      raw_loc: "000..236",
+      start: "Ln 1, Col 1",
+      end: "Ln 17, Col 4",
+      src: "class Parent is\n    var value: Integer(1)\n\n    this() is\n        this.value := 2\n    end\nend\n\nclass Child extends Parent is\nend\n\nclass Program is\n    this() is\n        var item: Child()\n        return item.value // 1 or 2???\n    end\nend",
+      data: (
+          classes: [
+              (
+                  raw_loc: "000..092",
+                  start: "Ln 1, Col 1",
+                  end: "Ln 7, Col 4",
+                  src: "class Parent is\n    var value: Integer(1)\n\n    this() is\n        this.value := 2\n    end\nend",
+                  data: (
+                      class_id: (
+                          raw_loc: "006..012",
+                          start: "Ln 1, Col 7",
+                          end: "Ln 1, Col 13",
+                          src: "Parent",
+                          data: (
+                              id: "Parent",
+                          ),
+                      ),
+                      parent_id: None,
+                      members: [
+                          VarDef((
+                              raw_loc: "020..041",
+                              start: "Ln 2, Col 5",
+                              end: "Ln 2, Col 26",
+                              src: "var value: Integer(1)",
+                              data: (
+                                  var_id: (
+                                      raw_loc: "024..029",
+                                      start: "Ln 2, Col 9",
+                                      end: "Ln 2, Col 14",
+                                      src: "value",
+                                      data: (
+                                          id: "value",
+                                      ),
+                                  ),
+                                  expr: MethodCall((
+                                      raw_loc: "031..041",
+                                      start: "Ln 2, Col 16",
+                                      end: "Ln 2, Col 26",
+                                      src: "Integer(1)",
+                                      data: (
+                                          expr: Cons((
+                                              raw_loc: "031..038",
+                                              start: "Ln 2, Col 16",
+                                              end: "Ln 2, Col 23",
+                                              src: "Integer",
+                                              data: (
+                                                  id: "Integer",
+                                              ),
+                                          )),
+                                          args: (
+                                              raw_loc: "038..041",
+                                              start: "Ln 2, Col 23",
+                                              end: "Ln 2, Col 26",
+                                              src: "(1)",
+                                              data: (
+                                                  exprs: [
+                                                      Primary(Int((
+                                                          raw_loc: "039..040",
+                                                          start: "Ln 2, Col 24",
+                                                          end: "Ln 2, Col 25",
+                                                          src: "1",
+                                                          data: (
+                                                              int: 1,
+                                                          ),
+                                                      ))),
+                                                  ],
+                                              ),
+                                          ),
+                                      ),
+                                  )),
+                              ),
+                          )),
+                          ConsDef((
+                              raw_loc: "047..088",
+                              start: "Ln 4, Col 5",
+                              end: "Ln 6, Col 8",
+                              src: "this() is\n        this.value := 2\n    end",
+                              data: (
+                                  params: (
+                                      raw_loc: "051..053",
+                                      start: "Ln 4, Col 9",
+                                      end: "Ln 4, Col 11",
+                                      src: "()",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  body: (
+                                      raw_loc: "054..088",
+                                      start: "Ln 4, Col 12",
+                                      end: "Ln 6, Col 8",
+                                      src: "is\n        this.value := 2\n    end",
+                                      data: (
+                                          members: [
+                                              Stmt(Assign((
+                                                  raw_loc: "065..080",
+                                                  start: "Ln 5, Col 9",
+                                                  end: "Ln 5, Col 24",
+                                                  src: "this.value := 2",
+                                                  data: (
+                                                      target: MemberAccess((
+                                                          raw_loc: "065..075",
+                                                          start: "Ln 5, Col 9",
+                                                          end: "Ln 5, Col 19",
+                                                          src: "this.value",
+                                                          data: (
+                                                              expr: Primary(This((
+                                                                  raw_loc: "065..069",
+                                                                  start: "Ln 5, Col 9",
+                                                                  end: "Ln 5, Col 13",
+                                                                  src: "this",
+                                                                  data: (),
+                                                              ))),
+                                                              member_id: (
+                                                                  raw_loc: "070..075",
+                                                                  start: "Ln 5, Col 14",
+                                                                  end: "Ln 5, Col 19",
+                                                                  src: "value",
+                                                                  data: (
+                                                                      id: "value",
+                                                                  ),
+                                                              ),
+                                                          ),
+                                                      )),
+                                                      value: Primary(Int((
+                                                          raw_loc: "079..080",
+                                                          start: "Ln 5, Col 23",
+                                                          end: "Ln 5, Col 24",
+                                                          src: "2",
+                                                          data: (
+                                                              int: 2,
+                                                          ),
+                                                      ))),
+                                                  ),
+                                              ))),
+                                          ],
+                                      ),
+                                  ),
+                              ),
+                          )),
+                      ],
+                  ),
+              ),
+              (
+                  raw_loc: "094..127",
+                  start: "Ln 9, Col 1",
+                  end: "Ln 10, Col 4",
+                  src: "class Child extends Parent is\nend",
+                  data: (
+                      class_id: (
+                          raw_loc: "100..105",
+                          start: "Ln 9, Col 7",
+                          end: "Ln 9, Col 12",
+                          src: "Child",
+                          data: (
+                              id: "Child",
+                          ),
+                      ),
+                      parent_id: Some((
+                          raw_loc: "114..120",
+                          start: "Ln 9, Col 21",
+                          end: "Ln 9, Col 27",
+                          src: "Parent",
+                          data: (
+                              id: "Parent",
+                          ),
+                      )),
+                      members: [],
+                  ),
+              ),
+              (
+                  raw_loc: "129..236",
+                  start: "Ln 12, Col 1",
+                  end: "Ln 17, Col 4",
+                  src: "class Program is\n    this() is\n        var item: Child()\n        return item.value // 1 or 2???\n    end\nend",
+                  data: (
+                      class_id: (
+                          raw_loc: "135..142",
+                          start: "Ln 12, Col 7",
+                          end: "Ln 12, Col 14",
+                          src: "Program",
+                          data: (
+                              id: "Program",
+                          ),
+                      ),
+                      parent_id: None,
+                      members: [
+                          ConsDef((
+                              raw_loc: "150..232",
+                              start: "Ln 13, Col 5",
+                              end: "Ln 16, Col 8",
+                              src: "this() is\n        var item: Child()\n        return item.value // 1 or 2???\n    end",
+                              data: (
+                                  params: (
+                                      raw_loc: "154..156",
+                                      start: "Ln 13, Col 9",
+                                      end: "Ln 13, Col 11",
+                                      src: "()",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  body: (
+                                      raw_loc: "157..232",
+                                      start: "Ln 13, Col 12",
+                                      end: "Ln 16, Col 8",
+                                      src: "is\n        var item: Child()\n        return item.value // 1 or 2???\n    end",
+                                      data: (
+                                          members: [
+                                              VarDef((
+                                                  raw_loc: "168..185",
+                                                  start: "Ln 14, Col 9",
+                                                  end: "Ln 14, Col 26",
+                                                  src: "var item: Child()",
+                                                  data: (
+                                                      var_id: (
+                                                          raw_loc: "172..176",
+                                                          start: "Ln 14, Col 13",
+                                                          end: "Ln 14, Col 17",
+                                                          src: "item",
+                                                          data: (
+                                                              id: "item",
+                                                          ),
+                                                      ),
+                                                      expr: MethodCall((
+                                                          raw_loc: "178..185",
+                                                          start: "Ln 14, Col 19",
+                                                          end: "Ln 14, Col 26",
+                                                          src: "Child()",
+                                                          data: (
+                                                              expr: Cons((
+                                                                  raw_loc: "178..183",
+                                                                  start: "Ln 14, Col 19",
+                                                                  end: "Ln 14, Col 24",
+                                                                  src: "Child",
+                                                                  data: (
+                                                                      id: "Child",
+                                                                  ),
+                                                              )),
+                                                              args: (
+                                                                  raw_loc: "183..185",
+                                                                  start: "Ln 14, Col 24",
+                                                                  end: "Ln 14, Col 26",
+                                                                  src: "()",
+                                                                  data: (
+                                                                      exprs: [],
+                                                                  ),
+                                                              ),
+                                                          ),
+                                                      )),
+                                                  ),
+                                              )),
+                                              Stmt(Return((
+                                                  raw_loc: "194..211",
+                                                  start: "Ln 15, Col 9",
+                                                  end: "Ln 15, Col 26",
+                                                  src: "return item.value",
+                                                  data: (
+                                                      value: Some(MemberAccess((
+                                                          raw_loc: "201..211",
+                                                          start: "Ln 15, Col 16",
+                                                          end: "Ln 15, Col 26",
+                                                          src: "item.value",
+                                                          data: (
+                                                              expr: Primary(Id((
+                                                                  raw_loc: "201..205",
+                                                                  start: "Ln 15, Col 16",
+                                                                  end: "Ln 15, Col 20",
+                                                                  src: "item",
+                                                                  data: (
+                                                                      id: "item",
+                                                                  ),
+                                                              ))),
+                                                              member_id: (
+                                                                  raw_loc: "206..211",
+                                                                  start: "Ln 15, Col 21",
+                                                                  end: "Ln 15, Col 26",
+                                                                  src: "value",
+                                                                  data: (
+                                                                      id: "value",
+                                                                  ),
+                                                              ),
+                                                          ),
+                                                      ))),
+                                                  ),
+                                              ))),
+                                          ],
+                                      ),
+                                  ),
+                              ),
+                          )),
+                      ],
+                  ),
+              ),
+          ],
+      ),
+  ))
+diagnostics: ''

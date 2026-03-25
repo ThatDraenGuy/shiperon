@@ -50,6 +50,7 @@ pub enum Reason<'src> {
     DisabledFeature(ShipFeature),
     ExprIsNotCallable { call_args: Rc<ShipArgs<'src>> },
     ExprIsNotAssignable { value: ShipExprAll<'src> },
+    AssignOnVarDef,
 }
 
 impl<'src> Reason<'src> {
@@ -72,6 +73,9 @@ impl<'src> Reason<'src> {
             Reason::ExprIsNotAssignable { value: _value } => {
                 "Expression is not assignable, but an assign is attempted".to_string()
             },
+            Reason::AssignOnVarDef => {
+                "Assign attempted instead of variable definition; replace `:=` with `:`".to_owned()
+            },
         }
     }
 }
@@ -93,6 +97,9 @@ impl<'src> Display for Reason<'src> {
             },
             Reason::ExprIsNotAssignable { value: _value } => {
                 f.write_fmt(format_args!("Expr is not assignable"))
+            },
+            Reason::AssignOnVarDef => {
+                f.write_str("Assign attempted instead of variable definition")
             },
         }
     }
