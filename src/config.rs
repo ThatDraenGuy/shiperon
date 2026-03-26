@@ -14,12 +14,34 @@ pub struct FeatureFlags {
     pub super_kw: bool,
 }
 
-impl Default for CompilerConfig {
-    fn default() -> Self {
+impl CompilerConfig {
+    pub fn no_features() -> Self {
         Self {
             debug: false,
-            features: FeatureFlags { class_casting: true, string: true, io: false, super_kw: true },
+            features: FeatureFlags {
+                class_casting: false,
+                string: false,
+                io: false,
+                super_kw: false,
+            },
         }
+    }
+
+    pub fn all_features() -> Self {
+        Self {
+            debug: false,
+            features: FeatureFlags { class_casting: true, string: true, io: true, super_kw: true },
+        }
+    }
+
+    pub fn with_debug(self) -> Self {
+        Self { debug: true, ..self }
+    }
+}
+
+impl Default for CompilerConfig {
+    fn default() -> Self {
+        Self::all_features()
     }
 }
 

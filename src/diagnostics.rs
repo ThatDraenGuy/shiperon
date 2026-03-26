@@ -51,6 +51,8 @@ pub enum Reason<'src> {
     ExprIsNotCallable { call_args: Rc<ShipArgs<'src>> },
     ExprIsNotAssignable { value: ShipExprAll<'src> },
     AssignOnVarDef,
+    UnnecessaryParenthesis,
+    ReturnTypeInCons,
 }
 
 impl<'src> Reason<'src> {
@@ -76,6 +78,8 @@ impl<'src> Reason<'src> {
             Reason::AssignOnVarDef => {
                 "Assign attempted instead of variable definition; replace `:=` with `:`".to_owned()
             },
+            Reason::UnnecessaryParenthesis => "Parenthesis are unnecessary".to_owned(),
+            Reason::ReturnTypeInCons => "Constructors don't have return types".to_owned(),
         }
     }
 }
@@ -101,6 +105,8 @@ impl<'src> Display for Reason<'src> {
             Reason::AssignOnVarDef => {
                 f.write_str("Assign attempted instead of variable definition")
             },
+            Reason::UnnecessaryParenthesis => f.write_str("Parenthesis are unnecessary"),
+            Reason::ReturnTypeInCons => f.write_str("Constructors don't have return types"),
         }
     }
 }

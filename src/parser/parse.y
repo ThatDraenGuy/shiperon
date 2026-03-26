@@ -35,7 +35,7 @@ use crate::ShipFeature;
 
 
 /* Bison defarations */
-%token <token>
+%token
     kCLASS      "class"
     kEXTENDS    "extends"
     kIS         "is"
@@ -59,7 +59,7 @@ use crate::ShipFeature;
     tSTRING     "string"
     tCHAR       "char"
 
-%token <token> 
+%token
     tCOLON      ":"
     tARROW      "=>"
     tLPAREN     "("
@@ -68,14 +68,14 @@ use crate::ShipFeature;
     tCOMMA      ","
     tDOT        "."
 
-%type <node> program
+%type <Value> program
     maybe_class_defs class_defs class_def class_id maybe_class_members class_members class_member
     var_def var_id
     constructor_def
     method_def method_decl method_body method_id params maybe_param_array param_array param
     body maybe_body_members body_members body_member
     param_id type_id expr stmt member_access method_call class_cast
-    assignable_expr nonassignable_expr callable_expr noncallable_expr non_expr_stmt assign_stmt while_stmt if_stmt return_stmt
+    assignable_expr nonassignable_expr callable_expr noncallable_expr non_expr_stmt assign_stmt while_stmt if_stmt if_condition return_stmt
     args maybe_args_array args_array primary primitive
     int float string char super this general_id
 
@@ -110,17 +110,9 @@ use crate::ShipFeature;
 
     class_def:
         kCLASS class_id kIS maybe_class_members kEND {
-            let kclass = $<Token>1;
-            let kend = $<Token>5;
-
-            let loc = Loc::merge_from(&kclass, &kend);
-            $$ = Value::new_class_def(self.src(), loc, $<ShipId>2, Option::None, $<ClassMembersBuilder>4);
+            $$ = Value::new_class_def(self.src(), Loc::merge(*@1, *@5), $<ShipId>2, Option::None, $<ClassMembersBuilder>4);
         } | kCLASS class_id kEXTENDS class_id kIS maybe_class_members kEND {
-            let kclass = $<Token>1;
-            let kend = $<Token>7;
-
-            let loc = Loc::merge_from(&kclass, &kend);
-            $$ = Value::new_class_def(self.src(), loc, $<ShipId>2, Option::Some($<ShipId>4), $<ClassMembersBuilder>6);
+            $$ = Value::new_class_def(self.src(), Loc::merge(*@1, *@7), $<ShipId>2, Option::Some($<ShipId>4), $<ClassMembersBuilder>6);
         }
 
     class_id:
@@ -159,15 +151,9 @@ use crate::ShipFeature;
 
     var_def:
         kVAR var_id tCOLON expr {
-            let kvar = $<Token>1;
-            let expr = $<ShipExprAll>4;
-            let loc = Loc::merge_from(&kvar, &expr);
-            $$ = Value::new_var_def(self.src(), loc, $<ShipId>2, expr);
+            $$ = Value::new_var_def(self.src(), Loc::merge(*@1, *@4), $<ShipId>2, $<ShipExprAll>4);
         } | kVAR var_id tASSIGN expr {
-            let kvar = $<Token>1;
-            let expr = $<ShipExprAll>4;
-            let loc = Loc::merge_from(&kvar, &expr);
-            $$ = Value::new_var_def(self.src(), loc, $<ShipId>2, expr);
+            $$ = Value::new_var_def(self.src(), Loc::merge(*@1, *@4), $<ShipId>2, $<ShipExprAll>4);
             self.register_error(*@3, Reason::AssignOnVarDef);
         }
 
@@ -178,43 +164,26 @@ use crate::ShipFeature;
 
     constructor_def:
         kTHIS params kIS body kEND {
-            let kthis = $<Token>1;
-            let params = $<ShipParams>2;
-            let kis = $<Token>3;
-            let members = $<BodyBuilder>4;
-            let kend = $<Token>5;
-
-            let body_loc = Loc::merge_from(&kis, &kend);
-            let body = ShipBody::new(BodyData{ members }, body_loc, self.src());
-
-            let loc = Loc::merge_from(&kthis, &kend);
-            $$ = Value::new_cons_def(self.src(), loc, params, body);
+            let body = ShipBody::new(BodyData{ members: $<BodyBuilder>4 }, Loc::merge(*@3, *@5), self.src());
+            $$ = Value::new_cons_def(self.src(), Loc::merge(*@1, *@5), $<ShipParams>2, body);
+        } | kTHIS params tCOLON type_id kIS body kEND {
+            self.register_error(Loc::merge(*@3, *@4), Reason::ReturnTypeInCons);
+            let body = ShipBody::new(BodyData{ members: $<BodyBuilder>6 }, Loc::merge(*@5, *@7), self.src());
+            $$ = Value::new_cons_def(self.src(), Loc::merge(*@1, *@7), $<ShipParams>2, body);
         }
 
     method_def:
         method_decl {
             $$ = $1;
         } | method_decl method_body {
-            let method_decl = $<ShipMethodDef>1;
-            let method_body = $<ShipMethodBodyAll>2;
-            let loc = Loc::merge_from(method_decl.as_ref(), &method_body);
-            $$ = Value::MethodDef(ShipMethodDef::new(MethodDefData{ body: Some(method_body), ..method_decl.data.clone() }, loc, self.src()));
+            $$ = Value::MethodDef(ShipMethodDef::new(MethodDefData{ body: Some($<ShipMethodBodyAll>2), ..$<ShipMethodDef>1.data.clone() }, Loc::merge(*@1, *@2), self.src()));
         }
 
     method_decl:
         kMETHOD method_id params {
-            let kmethod = $<Token>1;
-            let method_id = $<ShipId>2;
-            let params = $<ShipParams>3;
-            let loc = Loc::merge_from(&kmethod, params.as_ref());
-            $$ = Value::new_method_def(self.src(), loc, method_id, params, Option::None, Option::None);
+            $$ = Value::new_method_def(self.src(), Loc::merge(*@1, *@3), $<ShipId>2, $<ShipParams>3, Option::None, Option::None);
         } | kMETHOD method_id params tCOLON type_id {
-            let kmethod = $<Token>1;
-            let method_id = $<ShipId>2;
-            let params = $<ShipParams>3;
-            let type_id = $<ShipId>5;
-            let loc = Loc::merge_from(&kmethod, type_id.as_ref());
-            $$ = Value::new_method_def(self.src(), loc, method_id, params, Option::Some(type_id), Option::None);
+            $$ = Value::new_method_def(self.src(), Loc::merge(*@1, *@5), $<ShipId>2, $<ShipParams>3, Option::Some($<ShipId>5), Option::None);
         }
 
     method_id:
@@ -224,8 +193,7 @@ use crate::ShipFeature;
 
     params:
         tLPAREN maybe_param_array tRPAREN {
-            let loc = Loc::merge_from(&$<Token>1, &$<Token>3);
-            $$ = Value::new_params(self.src(), loc, $<ParamsBuilder>2);
+            $$ = Value::new_params(self.src(), Loc::merge(*@1, *@3), $<ParamsBuilder>2);
         }
 
     maybe_param_array:
@@ -250,10 +218,7 @@ use crate::ShipFeature;
 
     param:
         param_id tCOLON type_id {
-            let param_id = $<ShipId>1;
-            let type_id = $<ShipId>3;
-            let loc = Loc::merge_from(param_id.as_ref(), type_id.as_ref());
-            $$ = Value::new_param(self.src(), loc, param_id, type_id);
+            $$ = Value::new_param(self.src(), Loc::merge(*@1, *@3), $<ShipId>1, $<ShipId>3);
         }
 
     param_id:
@@ -268,13 +233,7 @@ use crate::ShipFeature;
 
     method_body:
         kIS body kEND {
-            let kis = $<Token>1;
-            let kend = $<Token>3;
-
-            let members = $<BodyBuilder>2;
-            let body_loc = Loc::merge_from(&kis, &kend);
-            let body = ShipBody::new(BodyData{ members }, body_loc, self.src());
-
+            let body = ShipBody::new(BodyData{ members: $<BodyBuilder>2 }, Loc::merge(*@1, *@3), self.src());
             $$ = Value::new_method_body(self.src(), ShipMethodBodyAll::Body(body));
         } | tARROW expr {
             $$ = Value::new_method_body(self.src(), ShipMethodBodyAll::Expr($<ShipExprAll>2));
@@ -407,8 +366,7 @@ use crate::ShipFeature;
 
     args:
         tLPAREN maybe_args_array tRPAREN {
-            let loc = Loc::merge_from(&$<Token>1, &$<Token>3);
-            $$ = Value::new_args(self.src(), loc, $<ArgsBuilder>2);
+            $$ = Value::new_args(self.src(), Loc::merge(*@1, *@3), $<ArgsBuilder>2);
         }
 
     maybe_args_array:
@@ -459,46 +417,26 @@ use crate::ShipFeature;
 
     while_stmt:
         kWHILE expr kLOOP body kEND {
-            let kwhile = $<Token>1;
-            let kloop = $<Token>3;
-            let kend = $<Token>5;
-
-            let members = $<BodyBuilder>4;
-            let body_loc = Loc::merge_from(&kloop, &kend);
-            let body = ShipBody::new(BodyData{ members }, body_loc, self.src());
-
-            let loc = Loc::merge_from(&kwhile, &kend);
-            $$ = Value::new_while_stmt(self.src(), loc, $<ShipExprAll>2, body);
+            let body = ShipBody::new(BodyData{ members: $<BodyBuilder>4 }, Loc::merge(*@3, *@5), self.src());
+            $$ = Value::new_while_stmt(self.src(), Loc::merge(*@1, *@5), $<ShipExprAll>2, body);
         }
 
     if_stmt:
-        kIF expr kTHEN body kEND {
-            let kif = $<Token>1;
-            let kthen = $<Token>3;
-            let kend = $<Token>5;
+        kIF if_condition kTHEN body kEND {
+            let body = ShipBody::new(BodyData{ members: $<BodyBuilder>4 }, Loc::merge(*@3, *@5), self.src());
+            $$ = Value::new_if_stmt(self.src(), Loc::merge(*@1, *@5), $<ShipExprAll>2, body, Option::None);
+        } | kIF if_condition kTHEN body kELSE body kEND {
+            let then_body = ShipBody::new(BodyData{ members: $<BodyBuilder>4 }, Loc::merge(*@3, *@5), self.src());
+            let else_body = ShipBody::new(BodyData{ members: $<BodyBuilder>6 }, Loc::merge(*@5, *@7), self.src());
+            $$ = Value::new_if_stmt(self.src(), Loc::merge(*@1, *@7), $<ShipExprAll>2, then_body, Option::Some(else_body));
+        }
 
-            let members = $<BodyBuilder>4;
-            let body_loc = Loc::merge_from(&kthen, &kend);
-            let body = ShipBody::new(BodyData{ members }, body_loc, self.src());
-
-            let loc = Loc::merge_from(&kif, &kend);
-            $$ = Value::new_if_stmt(self.src(), loc, $<ShipExprAll>2, body, Option::None);
-        } | kIF expr kTHEN body kELSE body kEND {
-            let kif = $<Token>1;
-            let kthen = $<Token>3;
-            let kelse = $<Token>5;
-            let kend = $<Token>7;
-
-            let then_members = $<BodyBuilder>4;
-            let then_body_loc = Loc::merge_from(&kthen, &kelse);
-            let then_body = ShipBody::new(BodyData{ members: then_members }, then_body_loc, self.src());
-
-            let else_members = $<BodyBuilder>6;
-            let else_body_loc = Loc::merge_from(&kelse, &kend);
-            let else_body = ShipBody::new(BodyData{ members: else_members }, else_body_loc, self.src());
-
-            let loc = Loc::merge_from(&kif, &kend);
-            $$ = Value::new_if_stmt(self.src(), loc, $<ShipExprAll>2, then_body, Option::Some(else_body));
+    if_condition:
+        expr {
+            $$ = $1;
+        } | tLPAREN expr tRPAREN {
+            self.register_warn(Loc::merge(*@1, *@3), Reason::UnnecessaryParenthesis);
+            $$ = $2;
         }
 
     return_stmt:
