@@ -1,0 +1,966 @@
+---
+source: tests/parser/mod.rs
+expression: result
+input_file: tests/parser/inputs/semantic-invalids.po
+---
+ast: |-
+  Some((
+      raw_loc: "000..889",
+      start: "Ln 1, Col 1",
+      end: "Ln 46, Col 4",
+      src: "class Base is\nend\n\nclass Derived extends Base is\nend\n\nclass DoublyDerived extends Derived is\nend\n\nclass NotDerived is\nend\n\nclass Program is\n    method IncorrectReturn(): Boolean => 1\n    method IncorrectReturn2(): Integer is\n        return true\n    end\n    method IncorrectReturn3() is\n        return 1.0\n    end\n    method IncorrectReturn4(): real is\n        return\n    end\n\n    method IntOnly(num: Integer) is\n    end\n\n    method TakeBase(item: Base) is\n    end\n\n    method DerivedOnly(item: Derived) is\n    end\n\n    this() is\n        IntOnly(true) // incorrect argument type\n\n        TakeBase(Base()) // ok\n        TakeBase(Derived()) // ok\n        TakeBase(DoublyDerived()) // ok\n        TakeBase(NotDerived()) // incorrect argument type\n\n        DerivedOnly(Derived()) // ok\n        DerivedOnly(DoublyDerived()) // ok\n        DerivedOnly(Base()) // incorrect argument type\n    end\nend",
+      data: (
+          classes: [
+              (
+                  raw_loc: "000..017",
+                  start: "Ln 1, Col 1",
+                  end: "Ln 2, Col 4",
+                  src: "class Base is\nend",
+                  data: (
+                      class_id: (
+                          raw_loc: "006..010",
+                          start: "Ln 1, Col 7",
+                          end: "Ln 1, Col 11",
+                          src: "Base",
+                          data: (
+                              id: "Base",
+                          ),
+                      ),
+                      parent_id: None,
+                      members: [],
+                  ),
+              ),
+              (
+                  raw_loc: "019..052",
+                  start: "Ln 4, Col 1",
+                  end: "Ln 5, Col 4",
+                  src: "class Derived extends Base is\nend",
+                  data: (
+                      class_id: (
+                          raw_loc: "025..032",
+                          start: "Ln 4, Col 7",
+                          end: "Ln 4, Col 14",
+                          src: "Derived",
+                          data: (
+                              id: "Derived",
+                          ),
+                      ),
+                      parent_id: Some((
+                          raw_loc: "041..045",
+                          start: "Ln 4, Col 23",
+                          end: "Ln 4, Col 27",
+                          src: "Base",
+                          data: (
+                              id: "Base",
+                          ),
+                      )),
+                      members: [],
+                  ),
+              ),
+              (
+                  raw_loc: "054..096",
+                  start: "Ln 7, Col 1",
+                  end: "Ln 8, Col 4",
+                  src: "class DoublyDerived extends Derived is\nend",
+                  data: (
+                      class_id: (
+                          raw_loc: "060..073",
+                          start: "Ln 7, Col 7",
+                          end: "Ln 7, Col 20",
+                          src: "DoublyDerived",
+                          data: (
+                              id: "DoublyDerived",
+                          ),
+                      ),
+                      parent_id: Some((
+                          raw_loc: "082..089",
+                          start: "Ln 7, Col 29",
+                          end: "Ln 7, Col 36",
+                          src: "Derived",
+                          data: (
+                              id: "Derived",
+                          ),
+                      )),
+                      members: [],
+                  ),
+              ),
+              (
+                  raw_loc: "098..121",
+                  start: "Ln 10, Col 1",
+                  end: "Ln 11, Col 4",
+                  src: "class NotDerived is\nend",
+                  data: (
+                      class_id: (
+                          raw_loc: "104..114",
+                          start: "Ln 10, Col 7",
+                          end: "Ln 10, Col 17",
+                          src: "NotDerived",
+                          data: (
+                              id: "NotDerived",
+                          ),
+                      ),
+                      parent_id: None,
+                      members: [],
+                  ),
+              ),
+              (
+                  raw_loc: "123..889",
+                  start: "Ln 13, Col 1",
+                  end: "Ln 46, Col 4",
+                  src: "class Program is\n    method IncorrectReturn(): Boolean => 1\n    method IncorrectReturn2(): Integer is\n        return true\n    end\n    method IncorrectReturn3() is\n        return 1.0\n    end\n    method IncorrectReturn4(): real is\n        return\n    end\n\n    method IntOnly(num: Integer) is\n    end\n\n    method TakeBase(item: Base) is\n    end\n\n    method DerivedOnly(item: Derived) is\n    end\n\n    this() is\n        IntOnly(true) // incorrect argument type\n\n        TakeBase(Base()) // ok\n        TakeBase(Derived()) // ok\n        TakeBase(DoublyDerived()) // ok\n        TakeBase(NotDerived()) // incorrect argument type\n\n        DerivedOnly(Derived()) // ok\n        DerivedOnly(DoublyDerived()) // ok\n        DerivedOnly(Base()) // incorrect argument type\n    end\nend",
+                  data: (
+                      class_id: (
+                          raw_loc: "129..136",
+                          start: "Ln 13, Col 7",
+                          end: "Ln 13, Col 14",
+                          src: "Program",
+                          data: (
+                              id: "Program",
+                          ),
+                      ),
+                      parent_id: None,
+                      members: [
+                          MethodDef((
+                              raw_loc: "144..182",
+                              start: "Ln 14, Col 5",
+                              end: "Ln 14, Col 43",
+                              src: "method IncorrectReturn(): Boolean => 1",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "151..166",
+                                      start: "Ln 14, Col 12",
+                                      end: "Ln 14, Col 27",
+                                      src: "IncorrectReturn",
+                                      data: (
+                                          id: "IncorrectReturn",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "166..168",
+                                      start: "Ln 14, Col 27",
+                                      end: "Ln 14, Col 29",
+                                      src: "()",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  return_type: Some((
+                                      raw_loc: "170..177",
+                                      start: "Ln 14, Col 31",
+                                      end: "Ln 14, Col 38",
+                                      src: "Boolean",
+                                      data: (
+                                          id: "Boolean",
+                                      ),
+                                  )),
+                                  body: Some(Expr(Primary(Int((
+                                      raw_loc: "181..182",
+                                      start: "Ln 14, Col 42",
+                                      end: "Ln 14, Col 43",
+                                      src: "1",
+                                      data: (
+                                          int: 1,
+                                      ),
+                                  ))))),
+                              ),
+                          )),
+                          MethodDef((
+                              raw_loc: "187..252",
+                              start: "Ln 15, Col 5",
+                              end: "Ln 17, Col 8",
+                              src: "method IncorrectReturn2(): Integer is\n        return true\n    end",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "194..210",
+                                      start: "Ln 15, Col 12",
+                                      end: "Ln 15, Col 28",
+                                      src: "IncorrectReturn2",
+                                      data: (
+                                          id: "IncorrectReturn2",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "210..212",
+                                      start: "Ln 15, Col 28",
+                                      end: "Ln 15, Col 30",
+                                      src: "()",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  return_type: Some((
+                                      raw_loc: "214..221",
+                                      start: "Ln 15, Col 32",
+                                      end: "Ln 15, Col 39",
+                                      src: "Integer",
+                                      data: (
+                                          id: "Integer",
+                                      ),
+                                  )),
+                                  body: Some(Body((
+                                      raw_loc: "222..252",
+                                      start: "Ln 15, Col 40",
+                                      end: "Ln 17, Col 8",
+                                      src: "is\n        return true\n    end",
+                                      data: (
+                                          members: [
+                                              Stmt(Return((
+                                                  raw_loc: "233..244",
+                                                  start: "Ln 16, Col 9",
+                                                  end: "Ln 16, Col 20",
+                                                  src: "return true",
+                                                  data: (
+                                                      value: Some(Primary(Id((
+                                                          raw_loc: "240..244",
+                                                          start: "Ln 16, Col 16",
+                                                          end: "Ln 16, Col 20",
+                                                          src: "true",
+                                                          data: (
+                                                              id: "true",
+                                                          ),
+                                                      )))),
+                                                  ),
+                                              ))),
+                                          ],
+                                      ),
+                                  ))),
+                              ),
+                          )),
+                          MethodDef((
+                              raw_loc: "257..312",
+                              start: "Ln 18, Col 5",
+                              end: "Ln 20, Col 8",
+                              src: "method IncorrectReturn3() is\n        return 1.0\n    end",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "264..280",
+                                      start: "Ln 18, Col 12",
+                                      end: "Ln 18, Col 28",
+                                      src: "IncorrectReturn3",
+                                      data: (
+                                          id: "IncorrectReturn3",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "280..282",
+                                      start: "Ln 18, Col 28",
+                                      end: "Ln 18, Col 30",
+                                      src: "()",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  return_type: None,
+                                  body: Some(Body((
+                                      raw_loc: "283..312",
+                                      start: "Ln 18, Col 31",
+                                      end: "Ln 20, Col 8",
+                                      src: "is\n        return 1.0\n    end",
+                                      data: (
+                                          members: [
+                                              Stmt(Return((
+                                                  raw_loc: "294..304",
+                                                  start: "Ln 19, Col 9",
+                                                  end: "Ln 19, Col 19",
+                                                  src: "return 1.0",
+                                                  data: (
+                                                      value: Some(Primary(Float((
+                                                          raw_loc: "301..304",
+                                                          start: "Ln 19, Col 16",
+                                                          end: "Ln 19, Col 19",
+                                                          src: "1.0",
+                                                          data: (
+                                                              float: 1.0,
+                                                          ),
+                                                      )))),
+                                                  ),
+                                              ))),
+                                          ],
+                                      ),
+                                  ))),
+                              ),
+                          )),
+                          MethodDef((
+                              raw_loc: "317..374",
+                              start: "Ln 21, Col 5",
+                              end: "Ln 23, Col 8",
+                              src: "method IncorrectReturn4(): real is\n        return\n    end",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "324..340",
+                                      start: "Ln 21, Col 12",
+                                      end: "Ln 21, Col 28",
+                                      src: "IncorrectReturn4",
+                                      data: (
+                                          id: "IncorrectReturn4",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "340..342",
+                                      start: "Ln 21, Col 28",
+                                      end: "Ln 21, Col 30",
+                                      src: "()",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  return_type: Some((
+                                      raw_loc: "344..348",
+                                      start: "Ln 21, Col 32",
+                                      end: "Ln 21, Col 36",
+                                      src: "real",
+                                      data: (
+                                          id: "real",
+                                      ),
+                                  )),
+                                  body: Some(Body((
+                                      raw_loc: "349..374",
+                                      start: "Ln 21, Col 37",
+                                      end: "Ln 23, Col 8",
+                                      src: "is\n        return\n    end",
+                                      data: (
+                                          members: [
+                                              Stmt(Return((
+                                                  raw_loc: "360..366",
+                                                  start: "Ln 22, Col 9",
+                                                  end: "Ln 22, Col 15",
+                                                  src: "return",
+                                                  data: (
+                                                      value: None,
+                                                  ),
+                                              ))),
+                                          ],
+                                      ),
+                                  ))),
+                              ),
+                          )),
+                          MethodDef((
+                              raw_loc: "380..419",
+                              start: "Ln 25, Col 5",
+                              end: "Ln 26, Col 8",
+                              src: "method IntOnly(num: Integer) is\n    end",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "387..394",
+                                      start: "Ln 25, Col 12",
+                                      end: "Ln 25, Col 19",
+                                      src: "IntOnly",
+                                      data: (
+                                          id: "IntOnly",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "394..408",
+                                      start: "Ln 25, Col 19",
+                                      end: "Ln 25, Col 33",
+                                      src: "(num: Integer)",
+                                      data: (
+                                          params: [
+                                              (
+                                                  raw_loc: "395..407",
+                                                  start: "Ln 25, Col 20",
+                                                  end: "Ln 25, Col 32",
+                                                  src: "num: Integer",
+                                                  data: (
+                                                      name: (
+                                                          raw_loc: "395..398",
+                                                          start: "Ln 25, Col 20",
+                                                          end: "Ln 25, Col 23",
+                                                          src: "num",
+                                                          data: (
+                                                              id: "num",
+                                                          ),
+                                                      ),
+                                                      var_type: (
+                                                          raw_loc: "400..407",
+                                                          start: "Ln 25, Col 25",
+                                                          end: "Ln 25, Col 32",
+                                                          src: "Integer",
+                                                          data: (
+                                                              id: "Integer",
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ),
+                                          ],
+                                      ),
+                                  ),
+                                  return_type: None,
+                                  body: Some(Body((
+                                      raw_loc: "409..419",
+                                      start: "Ln 25, Col 34",
+                                      end: "Ln 26, Col 8",
+                                      src: "is\n    end",
+                                      data: (
+                                          members: [],
+                                      ),
+                                  ))),
+                              ),
+                          )),
+                          MethodDef((
+                              raw_loc: "425..463",
+                              start: "Ln 28, Col 5",
+                              end: "Ln 29, Col 8",
+                              src: "method TakeBase(item: Base) is\n    end",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "432..440",
+                                      start: "Ln 28, Col 12",
+                                      end: "Ln 28, Col 20",
+                                      src: "TakeBase",
+                                      data: (
+                                          id: "TakeBase",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "440..452",
+                                      start: "Ln 28, Col 20",
+                                      end: "Ln 28, Col 32",
+                                      src: "(item: Base)",
+                                      data: (
+                                          params: [
+                                              (
+                                                  raw_loc: "441..451",
+                                                  start: "Ln 28, Col 21",
+                                                  end: "Ln 28, Col 31",
+                                                  src: "item: Base",
+                                                  data: (
+                                                      name: (
+                                                          raw_loc: "441..445",
+                                                          start: "Ln 28, Col 21",
+                                                          end: "Ln 28, Col 25",
+                                                          src: "item",
+                                                          data: (
+                                                              id: "item",
+                                                          ),
+                                                      ),
+                                                      var_type: (
+                                                          raw_loc: "447..451",
+                                                          start: "Ln 28, Col 27",
+                                                          end: "Ln 28, Col 31",
+                                                          src: "Base",
+                                                          data: (
+                                                              id: "Base",
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ),
+                                          ],
+                                      ),
+                                  ),
+                                  return_type: None,
+                                  body: Some(Body((
+                                      raw_loc: "453..463",
+                                      start: "Ln 28, Col 33",
+                                      end: "Ln 29, Col 8",
+                                      src: "is\n    end",
+                                      data: (
+                                          members: [],
+                                      ),
+                                  ))),
+                              ),
+                          )),
+                          MethodDef((
+                              raw_loc: "469..513",
+                              start: "Ln 31, Col 5",
+                              end: "Ln 32, Col 8",
+                              src: "method DerivedOnly(item: Derived) is\n    end",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "476..487",
+                                      start: "Ln 31, Col 12",
+                                      end: "Ln 31, Col 23",
+                                      src: "DerivedOnly",
+                                      data: (
+                                          id: "DerivedOnly",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "487..502",
+                                      start: "Ln 31, Col 23",
+                                      end: "Ln 31, Col 38",
+                                      src: "(item: Derived)",
+                                      data: (
+                                          params: [
+                                              (
+                                                  raw_loc: "488..501",
+                                                  start: "Ln 31, Col 24",
+                                                  end: "Ln 31, Col 37",
+                                                  src: "item: Derived",
+                                                  data: (
+                                                      name: (
+                                                          raw_loc: "488..492",
+                                                          start: "Ln 31, Col 24",
+                                                          end: "Ln 31, Col 28",
+                                                          src: "item",
+                                                          data: (
+                                                              id: "item",
+                                                          ),
+                                                      ),
+                                                      var_type: (
+                                                          raw_loc: "494..501",
+                                                          start: "Ln 31, Col 30",
+                                                          end: "Ln 31, Col 37",
+                                                          src: "Derived",
+                                                          data: (
+                                                              id: "Derived",
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ),
+                                          ],
+                                      ),
+                                  ),
+                                  return_type: None,
+                                  body: Some(Body((
+                                      raw_loc: "503..513",
+                                      start: "Ln 31, Col 39",
+                                      end: "Ln 32, Col 8",
+                                      src: "is\n    end",
+                                      data: (
+                                          members: [],
+                                      ),
+                                  ))),
+                              ),
+                          )),
+                          ConsDef((
+                              raw_loc: "519..885",
+                              start: "Ln 34, Col 5",
+                              end: "Ln 45, Col 8",
+                              src: "this() is\n        IntOnly(true) // incorrect argument type\n\n        TakeBase(Base()) // ok\n        TakeBase(Derived()) // ok\n        TakeBase(DoublyDerived()) // ok\n        TakeBase(NotDerived()) // incorrect argument type\n\n        DerivedOnly(Derived()) // ok\n        DerivedOnly(DoublyDerived()) // ok\n        DerivedOnly(Base()) // incorrect argument type\n    end",
+                              data: (
+                                  params: (
+                                      raw_loc: "523..525",
+                                      start: "Ln 34, Col 9",
+                                      end: "Ln 34, Col 11",
+                                      src: "()",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  body: (
+                                      raw_loc: "526..885",
+                                      start: "Ln 34, Col 12",
+                                      end: "Ln 45, Col 8",
+                                      src: "is\n        IntOnly(true) // incorrect argument type\n\n        TakeBase(Base()) // ok\n        TakeBase(Derived()) // ok\n        TakeBase(DoublyDerived()) // ok\n        TakeBase(NotDerived()) // incorrect argument type\n\n        DerivedOnly(Derived()) // ok\n        DerivedOnly(DoublyDerived()) // ok\n        DerivedOnly(Base()) // incorrect argument type\n    end",
+                                      data: (
+                                          members: [
+                                              Stmt(MethodCall((
+                                                  raw_loc: "537..550",
+                                                  start: "Ln 35, Col 9",
+                                                  end: "Ln 35, Col 22",
+                                                  src: "IntOnly(true)",
+                                                  data: (
+                                                      expr: Cons((
+                                                          raw_loc: "537..544",
+                                                          start: "Ln 35, Col 9",
+                                                          end: "Ln 35, Col 16",
+                                                          src: "IntOnly",
+                                                          data: (
+                                                              id: "IntOnly",
+                                                          ),
+                                                      )),
+                                                      args: (
+                                                          raw_loc: "544..550",
+                                                          start: "Ln 35, Col 16",
+                                                          end: "Ln 35, Col 22",
+                                                          src: "(true)",
+                                                          data: (
+                                                              exprs: [
+                                                                  Primary(Id((
+                                                                      raw_loc: "545..549",
+                                                                      start: "Ln 35, Col 17",
+                                                                      end: "Ln 35, Col 21",
+                                                                      src: "true",
+                                                                      data: (
+                                                                          id: "true",
+                                                                      ),
+                                                                  ))),
+                                                              ],
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ))),
+                                              Stmt(MethodCall((
+                                                  raw_loc: "587..603",
+                                                  start: "Ln 37, Col 9",
+                                                  end: "Ln 37, Col 25",
+                                                  src: "TakeBase(Base())",
+                                                  data: (
+                                                      expr: Cons((
+                                                          raw_loc: "587..595",
+                                                          start: "Ln 37, Col 9",
+                                                          end: "Ln 37, Col 17",
+                                                          src: "TakeBase",
+                                                          data: (
+                                                              id: "TakeBase",
+                                                          ),
+                                                      )),
+                                                      args: (
+                                                          raw_loc: "595..603",
+                                                          start: "Ln 37, Col 17",
+                                                          end: "Ln 37, Col 25",
+                                                          src: "(Base())",
+                                                          data: (
+                                                              exprs: [
+                                                                  MethodCall((
+                                                                      raw_loc: "596..602",
+                                                                      start: "Ln 37, Col 18",
+                                                                      end: "Ln 37, Col 24",
+                                                                      src: "Base()",
+                                                                      data: (
+                                                                          expr: Cons((
+                                                                              raw_loc: "596..600",
+                                                                              start: "Ln 37, Col 18",
+                                                                              end: "Ln 37, Col 22",
+                                                                              src: "Base",
+                                                                              data: (
+                                                                                  id: "Base",
+                                                                              ),
+                                                                          )),
+                                                                          args: (
+                                                                              raw_loc: "600..602",
+                                                                              start: "Ln 37, Col 22",
+                                                                              end: "Ln 37, Col 24",
+                                                                              src: "()",
+                                                                              data: (
+                                                                                  exprs: [],
+                                                                              ),
+                                                                          ),
+                                                                      ),
+                                                                  )),
+                                                              ],
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ))),
+                                              Stmt(MethodCall((
+                                                  raw_loc: "618..637",
+                                                  start: "Ln 38, Col 9",
+                                                  end: "Ln 38, Col 28",
+                                                  src: "TakeBase(Derived())",
+                                                  data: (
+                                                      expr: Cons((
+                                                          raw_loc: "618..626",
+                                                          start: "Ln 38, Col 9",
+                                                          end: "Ln 38, Col 17",
+                                                          src: "TakeBase",
+                                                          data: (
+                                                              id: "TakeBase",
+                                                          ),
+                                                      )),
+                                                      args: (
+                                                          raw_loc: "626..637",
+                                                          start: "Ln 38, Col 17",
+                                                          end: "Ln 38, Col 28",
+                                                          src: "(Derived())",
+                                                          data: (
+                                                              exprs: [
+                                                                  MethodCall((
+                                                                      raw_loc: "627..636",
+                                                                      start: "Ln 38, Col 18",
+                                                                      end: "Ln 38, Col 27",
+                                                                      src: "Derived()",
+                                                                      data: (
+                                                                          expr: Cons((
+                                                                              raw_loc: "627..634",
+                                                                              start: "Ln 38, Col 18",
+                                                                              end: "Ln 38, Col 25",
+                                                                              src: "Derived",
+                                                                              data: (
+                                                                                  id: "Derived",
+                                                                              ),
+                                                                          )),
+                                                                          args: (
+                                                                              raw_loc: "634..636",
+                                                                              start: "Ln 38, Col 25",
+                                                                              end: "Ln 38, Col 27",
+                                                                              src: "()",
+                                                                              data: (
+                                                                                  exprs: [],
+                                                                              ),
+                                                                          ),
+                                                                      ),
+                                                                  )),
+                                                              ],
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ))),
+                                              Stmt(MethodCall((
+                                                  raw_loc: "652..677",
+                                                  start: "Ln 39, Col 9",
+                                                  end: "Ln 39, Col 34",
+                                                  src: "TakeBase(DoublyDerived())",
+                                                  data: (
+                                                      expr: Cons((
+                                                          raw_loc: "652..660",
+                                                          start: "Ln 39, Col 9",
+                                                          end: "Ln 39, Col 17",
+                                                          src: "TakeBase",
+                                                          data: (
+                                                              id: "TakeBase",
+                                                          ),
+                                                      )),
+                                                      args: (
+                                                          raw_loc: "660..677",
+                                                          start: "Ln 39, Col 17",
+                                                          end: "Ln 39, Col 34",
+                                                          src: "(DoublyDerived())",
+                                                          data: (
+                                                              exprs: [
+                                                                  MethodCall((
+                                                                      raw_loc: "661..676",
+                                                                      start: "Ln 39, Col 18",
+                                                                      end: "Ln 39, Col 33",
+                                                                      src: "DoublyDerived()",
+                                                                      data: (
+                                                                          expr: Cons((
+                                                                              raw_loc: "661..674",
+                                                                              start: "Ln 39, Col 18",
+                                                                              end: "Ln 39, Col 31",
+                                                                              src: "DoublyDerived",
+                                                                              data: (
+                                                                                  id: "DoublyDerived",
+                                                                              ),
+                                                                          )),
+                                                                          args: (
+                                                                              raw_loc: "674..676",
+                                                                              start: "Ln 39, Col 31",
+                                                                              end: "Ln 39, Col 33",
+                                                                              src: "()",
+                                                                              data: (
+                                                                                  exprs: [],
+                                                                              ),
+                                                                          ),
+                                                                      ),
+                                                                  )),
+                                                              ],
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ))),
+                                              Stmt(MethodCall((
+                                                  raw_loc: "692..714",
+                                                  start: "Ln 40, Col 9",
+                                                  end: "Ln 40, Col 31",
+                                                  src: "TakeBase(NotDerived())",
+                                                  data: (
+                                                      expr: Cons((
+                                                          raw_loc: "692..700",
+                                                          start: "Ln 40, Col 9",
+                                                          end: "Ln 40, Col 17",
+                                                          src: "TakeBase",
+                                                          data: (
+                                                              id: "TakeBase",
+                                                          ),
+                                                      )),
+                                                      args: (
+                                                          raw_loc: "700..714",
+                                                          start: "Ln 40, Col 17",
+                                                          end: "Ln 40, Col 31",
+                                                          src: "(NotDerived())",
+                                                          data: (
+                                                              exprs: [
+                                                                  MethodCall((
+                                                                      raw_loc: "701..713",
+                                                                      start: "Ln 40, Col 18",
+                                                                      end: "Ln 40, Col 30",
+                                                                      src: "NotDerived()",
+                                                                      data: (
+                                                                          expr: Cons((
+                                                                              raw_loc: "701..711",
+                                                                              start: "Ln 40, Col 18",
+                                                                              end: "Ln 40, Col 28",
+                                                                              src: "NotDerived",
+                                                                              data: (
+                                                                                  id: "NotDerived",
+                                                                              ),
+                                                                          )),
+                                                                          args: (
+                                                                              raw_loc: "711..713",
+                                                                              start: "Ln 40, Col 28",
+                                                                              end: "Ln 40, Col 30",
+                                                                              src: "()",
+                                                                              data: (
+                                                                                  exprs: [],
+                                                                              ),
+                                                                          ),
+                                                                      ),
+                                                                  )),
+                                                              ],
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ))),
+                                              Stmt(MethodCall((
+                                                  raw_loc: "751..773",
+                                                  start: "Ln 42, Col 9",
+                                                  end: "Ln 42, Col 31",
+                                                  src: "DerivedOnly(Derived())",
+                                                  data: (
+                                                      expr: Cons((
+                                                          raw_loc: "751..762",
+                                                          start: "Ln 42, Col 9",
+                                                          end: "Ln 42, Col 20",
+                                                          src: "DerivedOnly",
+                                                          data: (
+                                                              id: "DerivedOnly",
+                                                          ),
+                                                      )),
+                                                      args: (
+                                                          raw_loc: "762..773",
+                                                          start: "Ln 42, Col 20",
+                                                          end: "Ln 42, Col 31",
+                                                          src: "(Derived())",
+                                                          data: (
+                                                              exprs: [
+                                                                  MethodCall((
+                                                                      raw_loc: "763..772",
+                                                                      start: "Ln 42, Col 21",
+                                                                      end: "Ln 42, Col 30",
+                                                                      src: "Derived()",
+                                                                      data: (
+                                                                          expr: Cons((
+                                                                              raw_loc: "763..770",
+                                                                              start: "Ln 42, Col 21",
+                                                                              end: "Ln 42, Col 28",
+                                                                              src: "Derived",
+                                                                              data: (
+                                                                                  id: "Derived",
+                                                                              ),
+                                                                          )),
+                                                                          args: (
+                                                                              raw_loc: "770..772",
+                                                                              start: "Ln 42, Col 28",
+                                                                              end: "Ln 42, Col 30",
+                                                                              src: "()",
+                                                                              data: (
+                                                                                  exprs: [],
+                                                                              ),
+                                                                          ),
+                                                                      ),
+                                                                  )),
+                                                              ],
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ))),
+                                              Stmt(MethodCall((
+                                                  raw_loc: "788..816",
+                                                  start: "Ln 43, Col 9",
+                                                  end: "Ln 43, Col 37",
+                                                  src: "DerivedOnly(DoublyDerived())",
+                                                  data: (
+                                                      expr: Cons((
+                                                          raw_loc: "788..799",
+                                                          start: "Ln 43, Col 9",
+                                                          end: "Ln 43, Col 20",
+                                                          src: "DerivedOnly",
+                                                          data: (
+                                                              id: "DerivedOnly",
+                                                          ),
+                                                      )),
+                                                      args: (
+                                                          raw_loc: "799..816",
+                                                          start: "Ln 43, Col 20",
+                                                          end: "Ln 43, Col 37",
+                                                          src: "(DoublyDerived())",
+                                                          data: (
+                                                              exprs: [
+                                                                  MethodCall((
+                                                                      raw_loc: "800..815",
+                                                                      start: "Ln 43, Col 21",
+                                                                      end: "Ln 43, Col 36",
+                                                                      src: "DoublyDerived()",
+                                                                      data: (
+                                                                          expr: Cons((
+                                                                              raw_loc: "800..813",
+                                                                              start: "Ln 43, Col 21",
+                                                                              end: "Ln 43, Col 34",
+                                                                              src: "DoublyDerived",
+                                                                              data: (
+                                                                                  id: "DoublyDerived",
+                                                                              ),
+                                                                          )),
+                                                                          args: (
+                                                                              raw_loc: "813..815",
+                                                                              start: "Ln 43, Col 34",
+                                                                              end: "Ln 43, Col 36",
+                                                                              src: "()",
+                                                                              data: (
+                                                                                  exprs: [],
+                                                                              ),
+                                                                          ),
+                                                                      ),
+                                                                  )),
+                                                              ],
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ))),
+                                              Stmt(MethodCall((
+                                                  raw_loc: "831..850",
+                                                  start: "Ln 44, Col 9",
+                                                  end: "Ln 44, Col 28",
+                                                  src: "DerivedOnly(Base())",
+                                                  data: (
+                                                      expr: Cons((
+                                                          raw_loc: "831..842",
+                                                          start: "Ln 44, Col 9",
+                                                          end: "Ln 44, Col 20",
+                                                          src: "DerivedOnly",
+                                                          data: (
+                                                              id: "DerivedOnly",
+                                                          ),
+                                                      )),
+                                                      args: (
+                                                          raw_loc: "842..850",
+                                                          start: "Ln 44, Col 20",
+                                                          end: "Ln 44, Col 28",
+                                                          src: "(Base())",
+                                                          data: (
+                                                              exprs: [
+                                                                  MethodCall((
+                                                                      raw_loc: "843..849",
+                                                                      start: "Ln 44, Col 21",
+                                                                      end: "Ln 44, Col 27",
+                                                                      src: "Base()",
+                                                                      data: (
+                                                                          expr: Cons((
+                                                                              raw_loc: "843..847",
+                                                                              start: "Ln 44, Col 21",
+                                                                              end: "Ln 44, Col 25",
+                                                                              src: "Base",
+                                                                              data: (
+                                                                                  id: "Base",
+                                                                              ),
+                                                                          )),
+                                                                          args: (
+                                                                              raw_loc: "847..849",
+                                                                              start: "Ln 44, Col 25",
+                                                                              end: "Ln 44, Col 27",
+                                                                              src: "()",
+                                                                              data: (
+                                                                                  exprs: [],
+                                                                              ),
+                                                                          ),
+                                                                      ),
+                                                                  )),
+                                                              ],
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ))),
+                                          ],
+                                      ),
+                                  ),
+                              ),
+                          )),
+                      ],
+                  ),
+              ),
+          ],
+      ),
+  ))
+diagnostics: ''

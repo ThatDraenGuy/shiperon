@@ -10,11 +10,13 @@ unsafe_code = "forbid"
 todo = "warn"
 
 [dependencies]
+clap = { version = "4.6.0", features = ["derive"] }
+ron = "0.12.0"
+serde = {version = "1.0.192", features = ["derive", "rc"] }
 thiserror = "2.0.18"
 
 [dev-dependencies]
 insta = { version = "1.46.3", features = ["glob"] }
-serde = {version = "1.0.192", features = ["derive"] }
 serde_yaml = "0.9.27"
 tempfile = "3.8.1"
 

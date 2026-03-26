@@ -1,31 +1,29 @@
-mod source;
 mod token;
 
-use std::{io, path::Path};
-
-pub use source::ByteSource;
 pub use token::{Token, TokenType, TokenValue};
 
 use crate::{
-    lexer::source::{FileSource, StrSource},
     parser::ParserLoc,
+    source::{ByteSource, ByteSourceIter, StrSource},
 };
 
 #[derive(Debug)]
 pub struct TokenRegistry;
 
 #[derive(Debug)]
-pub struct Lexer<T: ByteSource> {
-    src: T,
+pub struct Lexer<'src, S: ByteSource<'src>> {
+    pub src: S,
+    iter: <S as ByteSource<'src>>::Iter,
     pos: usize,
     loc: usize,
 }
 
 type LexResult<T> = Result<T, Token>; // errors have to be serialized into token value anyway, might as well do it immediately
 
-impl<S: ByteSource> Lexer<S> {
+impl<'src, S: ByteSource<'src>> Lexer<'src, S> {
     pub fn new(src: S) -> Self {
-        Self { src, pos: 0, loc: 0 }
+        let iter = src.iter();
+        Self { src, iter, pos: 0, loc: 0 }
     }
 
     fn empty_token(&self, token_type: TokenType) -> Token {
@@ -48,7 +46,7 @@ impl<S: ByteSource> Lexer<S> {
     }
 
     fn peek_maybe(&mut self) -> LexResult<Option<u8>> {
-        self.src.peek().map_err(|e| S::report_error(e)).map_err(|e| self.make_err(e))
+        self.iter.peek().map_err(S::Iter::report_error).map_err(|e| self.make_err(e))
     }
     fn peek(&mut self) -> LexResult<u8> {
         self.peek_maybe().and_then(|maybe_b| self.make_eof_if_none(maybe_b))
@@ -56,7 +54,7 @@ impl<S: ByteSource> Lexer<S> {
 
     fn next_maybe(&mut self) -> LexResult<Option<u8>> {
         self.pos += 1;
-        self.src.next().map_err(|e| self.make_err(S::report_error(&e)))
+        self.iter.next().map_err(|e| self.make_err(S::Iter::report_error(&e)))
     }
     fn next(&mut self) -> LexResult<u8> {
         self.next_maybe().and_then(|maybe_b| self.make_eof_if_none(maybe_b))
@@ -98,6 +96,86 @@ impl<S: ByteSource> Lexer<S> {
         let mut buf = vec![];
         self.take_into_while(&mut buf, pred)?;
         Ok(buf)
+    }
+
+    //TODO proper error reporting
+    fn read_char_literal(&mut self) -> LexResult<Token> {
+        self.next()?;
+        let result = match self.next_maybe()? {
+            Some(b'\'') => {
+                return Ok(self.token(TokenRegistry::YYUNDEF, TokenValue::String("''".to_owned())));
+            },
+            Some(b'\\') => match self.next_maybe()? {
+                Some(b'n') => '\n',
+                Some(b't') => '\t',
+                Some(b'\\') => '\\',
+                Some(b) => {
+                    return Ok(self.token(
+                        TokenRegistry::YYUNDEF,
+                        TokenValue::String(format!("'\\{}", b as char)),
+                    ));
+                },
+                None => {
+                    return Ok(
+                        self.token(TokenRegistry::YYUNDEF, TokenValue::String("'\\".to_owned()))
+                    );
+                },
+            },
+            Some(b) => b as char,
+            None => {
+                return Ok(self.token(TokenRegistry::YYUNDEF, TokenValue::String("'".to_owned())));
+            },
+        };
+
+        if let Some(b'\'') = self.peek_maybe()? {
+            self.next_maybe()?;
+            Ok(self.token(TokenRegistry::tCHAR, TokenValue::Char(result)))
+        } else {
+            Ok(self.token(TokenRegistry::YYUNDEF, TokenValue::String(format!("'{result}"))))
+        }
+    }
+
+    //TODO proper error reporting
+    fn read_string_literal(&mut self) -> LexResult<Token> {
+        self.next()?;
+        let mut string: Vec<u8> = vec![];
+        let mut is_escaped = false;
+        loop {
+            match is_escaped {
+                true => {
+                    match self.next_maybe()? {
+                        Some(b @ b'"') | Some(b @ b'\\') => {
+                            string.push(b);
+                        },
+                        Some(b'n') => string.push(b'\n'),
+                        Some(b't') => string.push(b'\t'),
+                        //think - other escape seqs?
+                        Some(b) => {
+                            string.push(b'\\');
+                            string.push(b);
+                        },
+                        None => return Err(self.empty_token(TokenRegistry::YYUNDEF)), //TODO proper malformed error
+                    };
+                    is_escaped = false;
+                },
+                false => {
+                    match self.next_maybe()? {
+                        Some(b'"') => break,
+                        Some(b'\\') => is_escaped = true,
+                        Some(b) => string.push(b),
+                        None => return Err(self.empty_token(TokenRegistry::YYUNDEF)), //TODO proper malformed error
+                    };
+                },
+            }
+        }
+
+        Ok(self.token(
+            TokenRegistry::tSTRING,
+            TokenValue::String(
+                String::from_utf8(string)
+                    .map_err(|_e| self.make_err("Invalid UTF-8 encountered"))?,
+            ),
+        ))
     }
 
     fn read_symbolic(&mut self) -> LexResult<Token> {
@@ -144,6 +222,8 @@ impl<S: ByteSource> Lexer<S> {
             "then" => self.empty_token(TokenRegistry::kTHEN),
             "else" => self.empty_token(TokenRegistry::kELSE),
             "return" => self.empty_token(TokenRegistry::kRETURN),
+            "as" => self.empty_token(TokenRegistry::kAS),
+            "super" => self.empty_token(TokenRegistry::kSUPER),
             _ => self.token(TokenRegistry::tIDENTIFIER, TokenValue::String(string)),
         })
     }
@@ -215,6 +295,8 @@ impl<S: ByteSource> Lexer<S> {
         match self.peek()? {
             b if b.is_ascii_alphabetic() => self.read_keyword_or_id(),
             b if b.is_ascii_digit() || b == b'-' => self.read_numeric(),
+            b'"' => self.read_string_literal(),
+            b'\'' => self.read_char_literal(),
             _ => self.read_symbolic(),
         }
     }
@@ -224,17 +306,8 @@ impl<S: ByteSource> Lexer<S> {
     }
 }
 
-impl Lexer<FileSource> {
-    pub fn of_file<P>(path: P) -> Result<Self, io::Error>
-    where
-        P: AsRef<Path>,
-    {
-        Ok(Self::new(FileSource::new(path)?))
-    }
-}
-
-impl<'a> Lexer<StrSource<'a>> {
-    pub fn of_str(str: &'a str) -> Self {
+impl<'src> Lexer<'src, StrSource<'src>> {
+    pub fn of_str(str: &'src str) -> Self {
         Self::new(StrSource::new(str))
     }
 }

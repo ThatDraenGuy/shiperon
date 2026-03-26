@@ -1,0 +1,15 @@
+class Program is
+    method stuff() is
+        var sum: Integer(0)
+        var limit: Integer(10);
+        var i: 0!
+        while i.Less(limit) loop
+            if i.Rem(2).Equal(0) then
+                sum := sum.Plus(i)
+            end
+        end
+        i.Rem(2) := 3
+        return sum
+        sum := sum.Plus(2)
+    end
+end

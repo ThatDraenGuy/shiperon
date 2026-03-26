@@ -1,0 +1,18 @@
+class Program is
+    this() => "aboba"
+
+    method valid(a: Integer) is
+        var v: true
+    end
+
+    method invalid(b: Boolean; b2: Boolean): Boolean is
+    end
+
+    method valid2(): Integer => 0
+
+    method invalid2(,)
+
+    method valid3(): Real is
+        return 1.0
+    end
+end

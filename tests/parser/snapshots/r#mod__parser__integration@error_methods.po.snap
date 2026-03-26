@@ -1,0 +1,346 @@
+---
+source: tests/parser/mod.rs
+expression: result
+input_file: tests/parser/inputs/error_methods.po
+---
+ast: |-
+  Some((
+      raw_loc: "000..284",
+      start: "Ln 1, Col 1",
+      end: "Ln 18, Col 4",
+      src: "class Program is\n    this() => \"aboba\"\n\n    method valid(a: Integer) is\n        var v: true\n    end\n\n    method invalid(b: Boolean; b2: Boolean): Boolean is\n    end\n\n    method valid2(): Integer => 0\n\n    method invalid2(,)\n\n    method valid3(): Real is\n        return 1.0\n    end\nend",
+      data: (
+          classes: [
+              (
+                  raw_loc: "000..284",
+                  start: "Ln 1, Col 1",
+                  end: "Ln 18, Col 4",
+                  src: "class Program is\n    this() => \"aboba\"\n\n    method valid(a: Integer) is\n        var v: true\n    end\n\n    method invalid(b: Boolean; b2: Boolean): Boolean is\n    end\n\n    method valid2(): Integer => 0\n\n    method invalid2(,)\n\n    method valid3(): Real is\n        return 1.0\n    end\nend",
+                  data: (
+                      class_id: (
+                          raw_loc: "006..013",
+                          start: "Ln 1, Col 7",
+                          end: "Ln 1, Col 14",
+                          src: "Program",
+                          data: (
+                              id: "Program",
+                          ),
+                      ),
+                      parent_id: None,
+                      members: [
+                          MethodDef((
+                              raw_loc: "044..099",
+                              start: "Ln 4, Col 5",
+                              end: "Ln 6, Col 8",
+                              src: "method valid(a: Integer) is\n        var v: true\n    end",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "051..056",
+                                      start: "Ln 4, Col 12",
+                                      end: "Ln 4, Col 17",
+                                      src: "valid",
+                                      data: (
+                                          id: "valid",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "056..068",
+                                      start: "Ln 4, Col 17",
+                                      end: "Ln 4, Col 29",
+                                      src: "(a: Integer)",
+                                      data: (
+                                          params: [
+                                              (
+                                                  raw_loc: "057..067",
+                                                  start: "Ln 4, Col 18",
+                                                  end: "Ln 4, Col 28",
+                                                  src: "a: Integer",
+                                                  data: (
+                                                      name: (
+                                                          raw_loc: "057..058",
+                                                          start: "Ln 4, Col 18",
+                                                          end: "Ln 4, Col 19",
+                                                          src: "a",
+                                                          data: (
+                                                              id: "a",
+                                                          ),
+                                                      ),
+                                                      var_type: (
+                                                          raw_loc: "060..067",
+                                                          start: "Ln 4, Col 21",
+                                                          end: "Ln 4, Col 28",
+                                                          src: "Integer",
+                                                          data: (
+                                                              id: "Integer",
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ),
+                                          ],
+                                      ),
+                                  ),
+                                  return_type: None,
+                                  body: Some(Body((
+                                      raw_loc: "069..099",
+                                      start: "Ln 4, Col 30",
+                                      end: "Ln 6, Col 8",
+                                      src: "is\n        var v: true\n    end",
+                                      data: (
+                                          members: [
+                                              VarDef((
+                                                  raw_loc: "080..091",
+                                                  start: "Ln 5, Col 9",
+                                                  end: "Ln 5, Col 20",
+                                                  src: "var v: true",
+                                                  data: (
+                                                      var_id: (
+                                                          raw_loc: "084..085",
+                                                          start: "Ln 5, Col 13",
+                                                          end: "Ln 5, Col 14",
+                                                          src: "v",
+                                                          data: (
+                                                              id: "v",
+                                                          ),
+                                                      ),
+                                                      expr: Primary(Id((
+                                                          raw_loc: "087..091",
+                                                          start: "Ln 5, Col 16",
+                                                          end: "Ln 5, Col 20",
+                                                          src: "true",
+                                                          data: (
+                                                              id: "true",
+                                                          ),
+                                                      ))),
+                                                  ),
+                                              )),
+                                          ],
+                                      ),
+                                  ))),
+                              ),
+                          )),
+                          MethodDef((
+                              raw_loc: "105..164",
+                              start: "Ln 8, Col 5",
+                              end: "Ln 9, Col 8",
+                              src: "method invalid(b: Boolean; b2: Boolean): Boolean is\n    end",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "112..119",
+                                      start: "Ln 8, Col 12",
+                                      end: "Ln 8, Col 19",
+                                      src: "invalid",
+                                      data: (
+                                          id: "invalid",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "119..144",
+                                      start: "Ln 8, Col 19",
+                                      end: "Ln 8, Col 44",
+                                      src: "(b: Boolean; b2: Boolean)",
+                                      data: (
+                                          params: [
+                                              (
+                                                  raw_loc: "120..130",
+                                                  start: "Ln 8, Col 20",
+                                                  end: "Ln 8, Col 30",
+                                                  src: "b: Boolean",
+                                                  data: (
+                                                      name: (
+                                                          raw_loc: "120..121",
+                                                          start: "Ln 8, Col 20",
+                                                          end: "Ln 8, Col 21",
+                                                          src: "b",
+                                                          data: (
+                                                              id: "b",
+                                                          ),
+                                                      ),
+                                                      var_type: (
+                                                          raw_loc: "123..130",
+                                                          start: "Ln 8, Col 23",
+                                                          end: "Ln 8, Col 30",
+                                                          src: "Boolean",
+                                                          data: (
+                                                              id: "Boolean",
+                                                          ),
+                                                      ),
+                                                  ),
+                                              ),
+                                          ],
+                                      ),
+                                  ),
+                                  return_type: Some((
+                                      raw_loc: "146..153",
+                                      start: "Ln 8, Col 46",
+                                      end: "Ln 8, Col 53",
+                                      src: "Boolean",
+                                      data: (
+                                          id: "Boolean",
+                                      ),
+                                  )),
+                                  body: Some(Body((
+                                      raw_loc: "154..164",
+                                      start: "Ln 8, Col 54",
+                                      end: "Ln 9, Col 8",
+                                      src: "is\n    end",
+                                      data: (
+                                          members: [],
+                                      ),
+                                  ))),
+                              ),
+                          )),
+                          MethodDef((
+                              raw_loc: "170..199",
+                              start: "Ln 11, Col 5",
+                              end: "Ln 11, Col 34",
+                              src: "method valid2(): Integer => 0",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "177..183",
+                                      start: "Ln 11, Col 12",
+                                      end: "Ln 11, Col 18",
+                                      src: "valid2",
+                                      data: (
+                                          id: "valid2",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "183..185",
+                                      start: "Ln 11, Col 18",
+                                      end: "Ln 11, Col 20",
+                                      src: "()",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  return_type: Some((
+                                      raw_loc: "187..194",
+                                      start: "Ln 11, Col 22",
+                                      end: "Ln 11, Col 29",
+                                      src: "Integer",
+                                      data: (
+                                          id: "Integer",
+                                      ),
+                                  )),
+                                  body: Some(Expr(Primary(Int((
+                                      raw_loc: "198..199",
+                                      start: "Ln 11, Col 33",
+                                      end: "Ln 11, Col 34",
+                                      src: "0",
+                                      data: (
+                                          int: 0,
+                                      ),
+                                  ))))),
+                              ),
+                          )),
+                          MethodDef((
+                              raw_loc: "205..223",
+                              start: "Ln 13, Col 5",
+                              end: "Ln 13, Col 23",
+                              src: "method invalid2(,)",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "212..220",
+                                      start: "Ln 13, Col 12",
+                                      end: "Ln 13, Col 20",
+                                      src: "invalid2",
+                                      data: (
+                                          id: "invalid2",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "220..223",
+                                      start: "Ln 13, Col 20",
+                                      end: "Ln 13, Col 23",
+                                      src: "(,)",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  return_type: None,
+                                  body: None,
+                              ),
+                          )),
+                          MethodDef((
+                              raw_loc: "229..280",
+                              start: "Ln 15, Col 5",
+                              end: "Ln 17, Col 8",
+                              src: "method valid3(): Real is\n        return 1.0\n    end",
+                              data: (
+                                  method_id: (
+                                      raw_loc: "236..242",
+                                      start: "Ln 15, Col 12",
+                                      end: "Ln 15, Col 18",
+                                      src: "valid3",
+                                      data: (
+                                          id: "valid3",
+                                      ),
+                                  ),
+                                  params: (
+                                      raw_loc: "242..244",
+                                      start: "Ln 15, Col 18",
+                                      end: "Ln 15, Col 20",
+                                      src: "()",
+                                      data: (
+                                          params: [],
+                                      ),
+                                  ),
+                                  return_type: Some((
+                                      raw_loc: "246..250",
+                                      start: "Ln 15, Col 22",
+                                      end: "Ln 15, Col 26",
+                                      src: "Real",
+                                      data: (
+                                          id: "Real",
+                                      ),
+                                  )),
+                                  body: Some(Body((
+                                      raw_loc: "251..280",
+                                      start: "Ln 15, Col 27",
+                                      end: "Ln 17, Col 8",
+                                      src: "is\n        return 1.0\n    end",
+                                      data: (
+                                          members: [
+                                              Stmt(Return((
+                                                  raw_loc: "262..272",
+                                                  start: "Ln 16, Col 9",
+                                                  end: "Ln 16, Col 19",
+                                                  src: "return 1.0",
+                                                  data: (
+                                                      value: Some(Primary(Float((
+                                                          raw_loc: "269..272",
+                                                          start: "Ln 16, Col 16",
+                                                          end: "Ln 16, Col 19",
+                                                          src: "1.0",
+                                                          data: (
+                                                              float: 1.0,
+                                                          ),
+                                                      )))),
+                                                  ),
+                                              ))),
+                                          ],
+                                      ),
+                                  ))),
+                              ),
+                          )),
+                      ],
+                  ),
+              ),
+          ],
+      ),
+  ))
+diagnostics: |-
+  Error at Ln 2, Col 12:
+  =>
+  ^
+  Unexpected token
+
+  Error at Ln 8, Col 30:
+  ;
+  ^
+  Unexpected token
+
+  Error at Ln 13, Col 21:
+  ,
+  ^
+  Unexpected token

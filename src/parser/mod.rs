@@ -6,4 +6,4 @@ mod value;
 pub use value::ParserValue;
 
 mod loc;
-pub use loc::ParserLoc;
+pub use loc::{ParserLoc, WithParserLoc};

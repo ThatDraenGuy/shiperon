@@ -1,8 +1,8 @@
-use std::fmt::{Debug, Display};
+use std::fmt::{Debug, Display, Write};
 
 use crate::{
     TokenRegistry,
-    parser::{ParserLoc, token_name},
+    parser::{ParserLoc, WithParserLoc, token_name},
 };
 
 pub type TokenType = i32;
@@ -13,6 +13,7 @@ pub enum TokenValue {
     Int(i32),
     Float(f32),
     String(String),
+    Char(char),
 }
 
 impl Debug for TokenValue {
@@ -22,6 +23,7 @@ impl Debug for TokenValue {
             Self::Int(i) => f.write_str(&format!("{i}")),
             Self::Float(fl) => f.write_str(&format!("{fl}")),
             Self::String(s) => f.write_str(s),
+            Self::Char(c) => f.write_char(*c),
         }
     }
 }
@@ -40,25 +42,36 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn type_name(&self) -> &'static str {
-        if self.token_type == TokenRegistry::YYUNDEF {
+    pub fn type_name(token_type: TokenType) -> &'static str {
+        if token_type == TokenRegistry::YYUNDEF {
             "YYUNDEF"
-        } else if self.token_type == TokenRegistry::YYerror {
+        } else if token_type == TokenRegistry::YYerror {
             "YYerror"
         } else {
-            token_name(self.token_type)
+            token_name(token_type)
         }
     }
 }
 
 impl Debug for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&format!("[ ({:?})\t{} {}]", self.loc, self.type_name(), self.token_value))
+        f.write_str(&format!(
+            "[ ({:?})\t{} {}]",
+            self.loc,
+            Self::type_name(self.token_type),
+            self.token_value
+        ))
     }
 }
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format!("{self:?}"))
+    }
+}
+
+impl WithParserLoc for Token {
+    fn loc(&self) -> ParserLoc {
+        self.loc
     }
 }
