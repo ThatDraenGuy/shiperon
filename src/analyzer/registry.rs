@@ -91,15 +91,47 @@ impl<Id: RegistryId, V> Registry<Id, V> {
     fn get_mut(&mut self, id: &Id) -> &mut V {
         self.inner.get_mut(id.as_index()).and_then(Option::as_mut).unwrap()
     }
+    #[inline]
+    fn replace<F>(&mut self, id: &Id, f: F)
+    where
+        F: FnOnce(Option<V>) -> V,
+    {
+        let idx = id.as_index();
+        let mut temp = Option::None;
+        std::mem::swap(&mut temp, &mut self.inner[idx]);
+        self.inner[idx] = Some(f(temp));
+    }
 
     #[inline]
     pub fn get(&self, id: &Id) -> &V {
-        self.inner.get(id.as_index()).and_then(Option::as_ref).unwrap()
+        self.inner[id.as_index()].as_ref().unwrap()
     }
 
     #[inline]
     pub fn iter(&self) -> Iter<'_, Id, V> {
         self.into_iter()
+    }
+
+    #[inline]
+    pub fn transform<V2, F>(self, mut f: F) -> Registry<Id, V2>
+    where
+        F: FnMut(Id, V) -> V2,
+    {
+        //TODO optimise
+        let mut new_registry = Registry::new_with(self.inner.len());
+        for (id, old_value) in self.into_iter() {
+            new_registry.insert(id, f(id, old_value));
+        }
+        new_registry
+    }
+
+    #[inline]
+    pub fn combine<V2, V3, F>(self, other: Registry<Id, V2>, f: F) -> Registry<Id, V3>
+    where
+        F: Fn(Option<V>, Option<V2>) -> Option<V3>,
+    {
+        let t = self.inner.into_iter().zip(other.inner).map(|(v, v2)| f(v, v2)).collect();
+        Registry { inner: t, phantom: PhantomData }
     }
 }
 
@@ -185,29 +217,27 @@ impl<'key, Id: RegistryId, V> NameRegistryBuilder<'key, Id, V> {
     pub fn new(id_provider: <Id as HasProvider>::Provider) -> Self {
         Self { registry: Default::default(), id_provider }
     }
-    // #[inline]
-    // pub fn insert(&mut self, name: &'key str, value: V) -> Id {
-    //     let id = self.id_provider.get();
-    //     self.registry.insert(name, id, value);
-    //     id
-    // }
-
     #[inline]
-    pub fn insert_or_update<Fi, Fu>(&mut self, name: &'key str, insert: Fi, update: Fu) -> Id
-    where
-        Fi: FnOnce() -> V,
-        Fu: FnOnce(&mut V),
-    {
+    pub fn insert(&mut self, name: &'key str, value: V) -> Option<(&V, V)> {
         match self.registry.get_by_name(name) {
-            Some(id) => {
-                let old = self.registry.get_mut(&id);
-                update(old);
-                id
-            },
+            Some(id) => Some((self.registry.get(&id), value)),
             None => {
                 let id = self.id_provider.get();
-                self.registry.insert(name, id, insert());
-                id
+                self.registry.insert(name, id, value);
+                None
+            },
+        }
+    }
+    #[inline]
+    pub fn update<F>(&mut self, name: &'key str, update: F)
+    where
+        F: FnOnce(Option<V>) -> V,
+    {
+        match self.registry.get_by_name(name) {
+            Some(id) => self.registry.replace(&id, update),
+            None => {
+                let value = update(None);
+                self.insert(name, value);
             },
         }
     }
@@ -241,6 +271,13 @@ impl<'key, Id: RegistryId, V: 'key> NameRegistry<'key, Id, V> {
     fn get_mut(&mut self, id: &Id) -> &mut V {
         self.id_to_value.get_mut(id)
     }
+    #[inline]
+    fn replace<F>(&mut self, id: &Id, f: F)
+    where
+        F: FnOnce(Option<V>) -> V,
+    {
+        self.id_to_value.replace(id, f);
+    }
 
     #[inline]
     pub fn get_by_name(&self, name: &str) -> Option<Id> {
@@ -257,31 +294,38 @@ impl<'key, Id: RegistryId, V: 'key> NameRegistry<'key, Id, V> {
         self.id_to_value.iter()
     }
 
-    pub fn transform<V2, F>(self, mut f: F) -> NameRegistry<'key, Id, V2>
+    pub fn transform<V2, Fp>(self, f: Fp) -> NameRegistry<'key, Id, V2>
     where
-        F: FnMut(Id, V) -> V2,
+        Fp: FnMut(Id, V) -> V2,
     {
-        let mut new_registry = Registry::new_with(self.id_to_value.inner.len());
-        for (id, old_value) in self.id_to_value.into_iter() {
-            new_registry.insert(id, f(id, old_value));
-        }
-
-        NameRegistry { name_to_id: self.name_to_id, id_to_value: new_registry }
+        NameRegistry { name_to_id: self.name_to_id, id_to_value: self.id_to_value.transform(f) }
     }
-    pub fn transform_with_self<V2, F>(self, mut f: F) -> NameRegistry<'key, Id, V2>
+
+    pub fn transform_with_self<V2, V3, Fp, Fc>(
+        self,
+        mut process: Fp,
+        combine: Fc,
+    ) -> NameRegistry<'key, Id, V3>
     where
-        F: FnMut(&Self, Id, &V) -> V2,
+        Fp: FnMut(&Self, Id, &V) -> V2,
+        Fc: Fn(V, V2) -> V3,
     {
         let mut new_registry = Registry::new_with(self.id_to_value.inner.len());
         for (id, old_value) in self.id_to_value.iter() {
-            new_registry.insert(id, f(&self, id, old_value));
+            new_registry.insert(id, process(&self, id, old_value));
         }
 
-        NameRegistry { name_to_id: self.name_to_id, id_to_value: new_registry }
+        NameRegistry {
+            name_to_id: self.name_to_id,
+            id_to_value: self.id_to_value.combine(new_registry, |v, v2| match (v, v2) {
+                (Some(a), Some(b)) => Some(combine(a, b)),
+                _ => None,
+            }),
+        }
     }
 }
 
-impl<'src, Id: RegistryId, V: 'src> Default for NameRegistry<'src, Id, V> {
+impl<'key, Id: RegistryId, V: 'key> Default for NameRegistry<'key, Id, V> {
     fn default() -> Self {
         Self { name_to_id: Default::default(), id_to_value: Default::default() }
     }
@@ -326,8 +370,8 @@ mod class {
         type Provider = SimpleIdProvider<UserClassId>;
     }
 
-    pub type ClassRegistry<'src, V> = NameRegistry<'src, UserClassId, V>;
-    pub type ClassRegistryBuilder<'src, V> = NameRegistryBuilder<'src, UserClassId, V>;
+    pub type ClassRegistry<'key, V> = NameRegistry<'key, UserClassId, V>;
+    pub type ClassRegistryBuilder<'key, V> = NameRegistryBuilder<'key, UserClassId, V>;
 }
 pub use class::*;
 
@@ -375,16 +419,16 @@ mod method {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct MethodId(MethodNameId, MethodOverloadId);
 
-    pub type MethodRegistry<'src, V> =
-        NameRegistry<'src, MethodNameId, Registry<MethodOverloadId, V>>;
-    impl<'src, V> MethodRegistry<'src, V> {
+    pub type MethodRegistry<'key, V> =
+        NameRegistry<'key, MethodNameId, Registry<MethodOverloadId, V>>;
+    impl<'key, V> MethodRegistry<'key, V> {
         #[inline]
         pub fn get_method(&self, id: &MethodId) -> &V {
             self.get(&id.0).get(&id.1)
         }
     }
-    pub type MethodRegistryBuilder<'src, V> =
-        NameRegistryBuilder<'src, MethodNameId, RegistryBuilder<MethodOverloadId, V>>;
+    pub type MethodRegistryBuilder<'key, V> =
+        NameRegistryBuilder<'key, MethodNameId, RegistryBuilder<MethodOverloadId, V>>;
 }
 pub use method::*;
 
@@ -411,3 +455,29 @@ mod constructor {
     pub type ConsRegistryBuilder<V> = RegistryBuilder<ConsId, V>;
 }
 pub use constructor::*;
+
+mod field {
+    use super::{
+        HasProvider, InnerRegistryId, NameRegistry, NameRegistryBuilder, SimpleIdProvider,
+    };
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct FieldId(u32);
+    impl InnerRegistryId for FieldId {
+        #[inline]
+        fn as_index(&self) -> usize {
+            self.0 as usize
+        }
+
+        #[inline]
+        fn from_index(idx: usize) -> Self {
+            Self(idx as u32)
+        }
+    }
+    impl HasProvider for FieldId {
+        type Provider = SimpleIdProvider<FieldId>;
+    }
+    pub type FieldRegistry<'key, V> = NameRegistry<'key, FieldId, V>;
+    pub type FieldRegistryBuilder<'key, V> = NameRegistryBuilder<'key, FieldId, V>;
+}
+pub use field::*;

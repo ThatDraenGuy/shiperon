@@ -1,3 +1,5 @@
+pub mod expr;
+pub mod field;
 pub mod registry;
 pub mod signature;
 
@@ -23,6 +25,7 @@ impl<'src> Analyzer<'src> {
         //1. class registry + inheritance. Errors: circular dependency, undefiend parent
         let class_defs = ClassDefRegistry::new(&self.ast.classes, &mut errors);
         let class_signatures = ClassSignatureRegistry::new(class_defs, &mut errors);
+        let checked_signatures = class_signatures.check_inheritance(&mut errors);
 
         //2. class view (field names & method+cons types). Errors: circular field dependency, duplicate fields/methods/cons
         //3. expressions (fields)???
