@@ -1,7 +1,7 @@
 use std::{error::Error, fs::read_to_string};
 
 use ron::ser::PrettyConfig;
-use shiperon::{CompilerConfig, Lexer, Parser};
+use shiperon::{CompilerConfig, Lexer, Parser, diagnostics::Renderable};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let input = read_to_string("samples/animals.po")?;

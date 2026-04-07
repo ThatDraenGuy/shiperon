@@ -450,12 +450,12 @@ impl NodeData for SuperData {
 pub type ShipSuper<'src> = Node<'src, SuperData>;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct IdData {
-    pub id: String,
+pub struct IdData<'src> {
+    pub id: &'src str,
 }
-impl NodeData for IdData {
+impl<'src> NodeData for IdData<'src> {
     fn name() -> &'static str {
         "Id"
     }
 }
-pub type ShipId<'src> = Node<'src, IdData>;
+pub type ShipId<'src> = Node<'src, IdData<'src>>;

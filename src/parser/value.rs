@@ -8,12 +8,6 @@ use crate::{
     parser::ParserLoc,
 };
 
-pub struct ParseData<'src, S: ByteSource<'src>> {
-    pub program: Option<Rc<ShipProgram<'src>>>,
-    pub diagnostics: Vec<Diagnostic<'src>>,
-    pub src: S,
-}
-
 #[derive(Clone, Debug, Default)]
 pub enum ParserValue<'src> {
     None,
@@ -434,7 +428,13 @@ impl<'src> ParserValue<'src> {
 
     pub fn new_id(src: &impl ByteSource<'src>, token: Token) -> Self {
         match token.token_value {
-            TokenValue::String(id) => Self::Id(ShipId::new(IdData { id }, token.loc, src)),
+            TokenValue::String(_id) => Self::Id(ShipId::new(
+                IdData {
+                    id: str::from_utf8(src.source(token.loc)).unwrap_or("non utf-8 fragment"),
+                },
+                token.loc,
+                src,
+            )),
             other => unreachable!("expected String, got {:?}", other),
         }
     }

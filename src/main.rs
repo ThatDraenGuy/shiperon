@@ -2,7 +2,7 @@ use std::{error::Error, fs::read_to_string};
 
 use clap::{Parser, ValueEnum};
 use ron::ser::PrettyConfig;
-use shiperon::{CompilerConfig, Lexer, config::FeatureFlags};
+use shiperon::{CompilerConfig, Lexer, config::FeatureFlags, diagnostics::Renderable};
 
 /// The one and only Shiperon Compiler
 #[derive(Parser, Debug)]

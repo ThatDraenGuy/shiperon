@@ -14,7 +14,7 @@ use crate::Lexer as AppLexer;
 use crate::TokenRegistry as Lexer;
 use crate::lexer::Token;
 use crate::ByteSource;
-use crate::parser::{WithParserLoc, value::*, ParserLoc as Loc, ParserValue as Value};
+use crate::parser::{WithParserLoc, value::*, ParseData, ParseError, ParserLoc as Loc, ParserValue as Value};
 use crate::ast::*;
 use crate::diagnostics::*;
 use crate::CompilerConfig;
@@ -154,7 +154,7 @@ use crate::ShipFeature;
             $$ = Value::new_var_def(self.src(), Loc::merge(*@1, *@4), $<ShipId>2, $<ShipExprAll>4);
         } | kVAR var_id tASSIGN expr {
             $$ = Value::new_var_def(self.src(), Loc::merge(*@1, *@4), $<ShipId>2, $<ShipExprAll>4);
-            self.register_error(*@3, Reason::AssignOnVarDef);
+            self.register_error(*@3, ParseError::AssignOnVarDef);
         }
 
     var_id:
@@ -167,7 +167,7 @@ use crate::ShipFeature;
             let body = ShipBody::new(BodyData{ members: $<BodyBuilder>4 }, Loc::merge(*@3, *@5), self.src());
             $$ = Value::new_cons_def(self.src(), Loc::merge(*@1, *@5), $<ShipParams>2, body);
         } | kTHIS params tCOLON type_id kIS body kEND {
-            self.register_error(Loc::merge(*@3, *@4), Reason::ReturnTypeInCons);
+            self.register_error(Loc::merge(*@3, *@4), ParseError::ReturnTypeInCons);
             let body = ShipBody::new(BodyData{ members: $<BodyBuilder>6 }, Loc::merge(*@5, *@7), self.src());
             $$ = Value::new_cons_def(self.src(), Loc::merge(*@1, *@7), $<ShipParams>2, body);
         }
@@ -335,7 +335,7 @@ use crate::ShipFeature;
         callable_expr args {
             $$ = Value::new_method_call(self.src(), Loc::merge(*@1, *@2), $<ShipCallableExprAll>1, $<ShipArgs>2);
         } | noncallable_expr args {
-            self.yyerror(*@1, Reason::ExprIsNotCallable{ call_args: $<ShipArgs>2 })?;
+            self.yyerror(*@1, ParseError::ExprIsNotCallable{ call_args: $<ShipArgs>2 })?;
         }
 
     class_cast:
@@ -412,7 +412,7 @@ use crate::ShipFeature;
             let right = $<ShipExprAll>3;
             $$ = Value::new_assign_stmt(self.src(), Loc::merge(*@1, *@3), left, right);
         } | nonassignable_expr tASSIGN expr {
-            self.yyerror(Loc::merge(*@1, *@3), Reason::ExprIsNotAssignable{ value: $<ShipExprAll>3 })?;
+            self.yyerror(Loc::merge(*@1, *@3), ParseError::ExprIsNotAssignable{ value: $<ShipExprAll>3 })?;
         }
 
     while_stmt:
@@ -435,7 +435,7 @@ use crate::ShipFeature;
         expr {
             $$ = $1;
         } | tLPAREN expr tRPAREN {
-            self.register_warn(Loc::merge(*@1, *@3), Reason::UnnecessaryParenthesis);
+            self.register_warn(Loc::merge(*@1, *@3), ParseError::UnnecessaryParenthesis);
             $$ = $2;
         }
 
@@ -448,12 +448,12 @@ use crate::ShipFeature;
 
             let afters = $<BodyBuilder>3;
             if !afters.is_empty() {
-                self.register_warn(*@3, Reason::BodyMembersAfterReturn{ return_stmt });
+                self.register_warn(*@3, ParseError::BodyMembersAfterReturn{ return_stmt });
             }
         } | kRETURN non_expr_stmt body {
             let (value, return_stmt) = Value::new_return_stmt(self.src(), *@1, Option::None);
             $$ = value;
-            self.register_warn(Loc::merge(*@2, *@3), Reason::BodyMembersAfterReturn{ return_stmt });
+            self.register_warn(Loc::merge(*@2, *@3), ParseError::BodyMembersAfterReturn{ return_stmt });
         }
 
     int:
@@ -519,26 +519,26 @@ impl<'src /* 'fix quotes */, S: ByteSource<'src /* 'fix quotes */>> Parser<'src 
 
     fn check_feature(&mut self, loc: Loc, feature: ShipFeature) {
         if !feature.is_enabled(&self.config.features) {
-            self.register_error(loc, Reason::DisabledFeature(feature));
+            self.register_error(loc, ParseError::DisabledFeature(feature));
         }
     }
 
-    fn register_warn(&mut self, loc: Loc, reason: Reason<'src /* 'fix quotes */>) {
-        self.diagnostics.push(Diagnostic{level: ErrorLevel::Warn, loc, reason});
+    fn register_warn(&mut self, loc: Loc, reason: ParseError<'src /* 'fix quotes */>) {
+        self.diagnostics.push(Diagnostic{level: ErrorLevel::Warn, loc, reason: reason.into()});
     }
 
-    fn register_error(&mut self, loc: Loc, reason: Reason<'src /* 'fix quotes */>) {
-        self.diagnostics.push(Diagnostic{level: ErrorLevel::Err, loc, reason});
+    fn register_error(&mut self, loc: Loc, reason: ParseError<'src /* 'fix quotes */>) {
+        self.diagnostics.push(Diagnostic{level: ErrorLevel::Err, loc, reason: reason.into()});
     }
 
-    fn yyerror(&mut self, loc: Loc, reason: Reason<'src /* 'fix quotes */>) -> Result<i32, ()> {
+    fn yyerror(&mut self, loc: Loc, reason: ParseError<'src /* 'fix quotes */>) -> Result<i32, ()> {
         self.register_error(loc, reason);
         Err(())
     }
 
     fn report_syntax_error(&mut self, stack: &YYStack, yytoken: &SymbolKind, loc: YYLoc) {
         let id: usize = yytoken.code().try_into().expect("failed to convert token code into i32, is it too big?");
-        self.register_error(loc, Reason::UnexpectedToken { token_name: Lexer::TOKEN_NAMES[id] });
+        self.register_error(loc, ParseError::UnexpectedToken { token_name: Lexer::TOKEN_NAMES[id] });
     }
 
     pub fn consume_parse(mut self) -> ParseData<'src /* 'fix quotes */, S> {

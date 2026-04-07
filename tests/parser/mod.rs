@@ -3,7 +3,7 @@ use std::{error::Error, fs::read_to_string, path::Path};
 use insta::{assert_snapshot, glob};
 use ron::ser::PrettyConfig;
 use serde::Serialize;
-use shiperon::{CompilerConfig, Lexer, Parser};
+use shiperon::{CompilerConfig, Lexer, Parser, diagnostics::Renderable};
 
 #[derive(Debug, Serialize)]
 struct TestOutput {

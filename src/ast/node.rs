@@ -1,5 +1,6 @@
 use std::{
     fmt::{Debug, Display},
+    ops::Deref,
     rc::Rc,
 };
 
@@ -48,6 +49,14 @@ pub struct Node<'src, N: NodeData> {
     pub end: NodeLoc,
     pub src: &'src [u8],
     pub data: N,
+}
+
+impl<'src, N: NodeData> Deref for Node<'src, N> {
+    type Target = N;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
 }
 
 impl<'src, N: NodeData> Node<'src, N> {
