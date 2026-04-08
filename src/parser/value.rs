@@ -25,7 +25,7 @@ pub enum ParserValue<'src> {
     Primary(ShipPrimaryAll<'src>),
     ArgsBuilder(Vec<ShipExprAll<'src>>),
     Args(Rc<ShipArgs<'src>>),
-    MethodCallExpr(Rc<ShipMethodCallExpr<'src>>),
+    CallExpr(Rc<ShipCallExpr<'src>>),
     MemberAccessExpr(Rc<ShipMemberAccessExpr<'src>>),
     ClassCastExpr(Rc<ShipClassCastExpr<'src>>),
     AssignableExpr(ShipAssignableExprAll<'src>),
@@ -161,10 +161,10 @@ impl<'src> ShipArgs<'src> {
     }
 }
 
-impl<'src> ShipMethodCallExpr<'src> {
+impl<'src> ShipCallExpr<'src> {
     pub fn from(value: ParserValue<'src>) -> Rc<Self> {
         match value {
-            ParserValue::MethodCallExpr(n) => n,
+            ParserValue::CallExpr(n) => n,
             other => unreachable!("expected MethodCallExpr, got {:?}", other),
         }
     }
@@ -523,7 +523,7 @@ impl<'src> ParserValue<'src> {
         expr: ShipCallableExprAll<'src>,
         args: Rc<ShipArgs<'src>>,
     ) -> Self {
-        Self::MethodCallExpr(ShipMethodCallExpr::new(MethodCallExprData { expr, args }, loc, src))
+        Self::CallExpr(ShipCallExpr::new(CallExprData { expr, args }, loc, src))
     }
 
     pub fn new_assignable_expr(

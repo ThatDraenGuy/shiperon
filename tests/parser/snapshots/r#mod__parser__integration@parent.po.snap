@@ -43,7 +43,7 @@ ast: |-
                                           id: "value",
                                       ),
                                   ),
-                                  expr: MethodCall((
+                                  expr: Call((
                                       raw_loc: "031..041",
                                       start: "Ln 2, Col 16",
                                       end: "Ln 2, Col 26",
@@ -233,7 +233,7 @@ ast: |-
                                                               id: "item",
                                                           ),
                                                       ),
-                                                      expr: MethodCall((
+                                                      expr: Call((
                                                           raw_loc: "178..185",
                                                           start: "Ln 14, Col 19",
                                                           end: "Ln 14, Col 26",

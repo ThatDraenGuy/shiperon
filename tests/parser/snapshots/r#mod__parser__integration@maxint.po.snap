@@ -128,7 +128,7 @@ ast: |-
                                                               id: "arr",
                                                           ),
                                                       ),
-                                                      expr: MethodCall((
+                                                      expr: Call((
                                                           raw_loc: "091..102",
                                                           start: "Ln 5, Col 19",
                                                           end: "Ln 5, Col 30",
@@ -166,7 +166,7 @@ ast: |-
                                                       )),
                                                   ),
                                               )),
-                                              Stmt(MethodCall((
+                                              Stmt(Call((
                                                   raw_loc: "111..124",
                                                   start: "Ln 6, Col 9",
                                                   end: "Ln 6, Col 22",
@@ -228,7 +228,7 @@ ast: |-
                                                       ),
                                                   ),
                                               ))),
-                                              Stmt(MethodCall((
+                                              Stmt(Call((
                                                   raw_loc: "133..146",
                                                   start: "Ln 7, Col 9",
                                                   end: "Ln 7, Col 22",
@@ -290,7 +290,7 @@ ast: |-
                                                       ),
                                                   ),
                                               ))),
-                                              Stmt(MethodCall((
+                                              Stmt(Call((
                                                   raw_loc: "155..168",
                                                   start: "Ln 8, Col 9",
                                                   end: "Ln 8, Col 22",
@@ -352,7 +352,7 @@ ast: |-
                                                       ),
                                                   ),
                                               ))),
-                                              Stmt(MethodCall((
+                                              Stmt(Call((
                                                   raw_loc: "177..190",
                                                   start: "Ln 9, Col 9",
                                                   end: "Ln 9, Col 22",
@@ -414,7 +414,7 @@ ast: |-
                                                       ),
                                                   ),
                                               ))),
-                                              Stmt(MethodCall((
+                                              Stmt(Call((
                                                   raw_loc: "199..212",
                                                   start: "Ln 10, Col 9",
                                                   end: "Ln 10, Col 22",
@@ -482,7 +482,7 @@ ast: |-
                                                   end: "Ln 11, Col 27",
                                                   src: "return MaxInt(arr)",
                                                   data: (
-                                                      value: Some(MethodCall((
+                                                      value: Some(Call((
                                                           raw_loc: "228..239",
                                                           start: "Ln 11, Col 16",
                                                           end: "Ln 11, Col 27",
@@ -650,7 +650,7 @@ ast: |-
                                                               id: "i",
                                                           ),
                                                       ),
-                                                      expr: MethodCall((
+                                                      expr: Call((
                                                           raw_loc: "339..349",
                                                           start: "Ln 16, Col 17",
                                                           end: "Ln 16, Col 27",
@@ -694,7 +694,7 @@ ast: |-
                                                   end: "Ln 22, Col 12",
                                                   src: "while i.Less(a.Length) loop\n            if a.get(i).Greater(max) then\n                max := get(i)\n            end\n            i := i.Plus(1)\n        end",
                                                   data: (
-                                                      condition: MethodCall((
+                                                      condition: Call((
                                                           raw_loc: "364..380",
                                                           start: "Ln 17, Col 15",
                                                           end: "Ln 17, Col 31",
@@ -777,7 +777,7 @@ ast: |-
                                                                       end: "Ln 20, Col 16",
                                                                       src: "if a.get(i).Greater(max) then\n                max := get(i)\n            end",
                                                                       data: (
-                                                                          condition: MethodCall((
+                                                                          condition: Call((
                                                                               raw_loc: "401..422",
                                                                               start: "Ln 18, Col 16",
                                                                               end: "Ln 18, Col 37",
@@ -789,7 +789,7 @@ ast: |-
                                                                                       end: "Ln 18, Col 32",
                                                                                       src: "a.get(i).Greater",
                                                                                       data: (
-                                                                                          expr: MethodCall((
+                                                                                          expr: Call((
                                                                                               raw_loc: "401..409",
                                                                                               start: "Ln 18, Col 16",
                                                                                               end: "Ln 18, Col 24",
@@ -896,7 +896,7 @@ ast: |-
                                                                                                       id: "max",
                                                                                                   ),
                                                                                               )),
-                                                                                              value: MethodCall((
+                                                                                              value: Call((
                                                                                                   raw_loc: "451..457",
                                                                                                   start: "Ln 19, Col 24",
                                                                                                   end: "Ln 19, Col 30",
@@ -955,7 +955,7 @@ ast: |-
                                                                                   id: "i",
                                                                               ),
                                                                           )),
-                                                                          value: MethodCall((
+                                                                          value: Call((
                                                                               raw_loc: "491..500",
                                                                               start: "Ln 21, Col 18",
                                                                               end: "Ln 21, Col 27",

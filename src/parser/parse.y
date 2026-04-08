@@ -279,7 +279,7 @@ use crate::ShipFeature;
         member_access {
             $$ = Value::new_expr(self.src(), ShipExprAll::MemberAccess($<ShipMemberAccessExpr>1));
         } | method_call {
-            $$ = Value::new_expr(self.src(), ShipExprAll::MethodCall($<ShipMethodCallExpr>1));
+            $$ = Value::new_expr(self.src(), ShipExprAll::Call($<ShipCallExpr>1));
         } | primary {
             $$ = Value::new_expr(self.src(), ShipExprAll::Primary($<ShipPrimaryAll>1));
         } | class_cast {
@@ -394,7 +394,7 @@ use crate::ShipFeature;
             $$ = $1;
         }
         | method_call {
-            $$ = Value::new_stmt(self.src(), ShipStmtAll::MethodCall($<ShipMethodCallExpr>1));
+            $$ = Value::new_stmt(self.src(), ShipStmtAll::Call($<ShipCallExpr>1));
         }
 
     non_expr_stmt:

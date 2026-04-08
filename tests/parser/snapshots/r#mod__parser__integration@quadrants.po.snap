@@ -43,7 +43,7 @@ ast: |-
                                           id: "xMul",
                                       ),
                                   ),
-                                  expr: MethodCall((
+                                  expr: Call((
                                       raw_loc: "032..041",
                                       start: "Ln 2, Col 15",
                                       end: "Ln 2, Col 24",
@@ -96,7 +96,7 @@ ast: |-
                                           id: "yMul",
                                       ),
                                   ),
-                                  expr: MethodCall((
+                                  expr: Call((
                                       raw_loc: "056..065",
                                       start: "Ln 3, Col 15",
                                       end: "Ln 3, Col 24",
@@ -356,7 +356,7 @@ ast: |-
                                           id: "Boolean",
                                       ),
                                   )),
-                                  body: Some(Expr(MethodCall((
+                                  body: Some(Expr(Call((
                                       raw_loc: "203..224",
                                       start: "Ln 10, Col 40",
                                       end: "Ln 10, Col 61",
@@ -484,7 +484,7 @@ ast: |-
                                                   end: "Ln 14, Col 12",
                                                   src: "if Sign(num) then\n            return num\n        end",
                                                   data: (
-                                                      condition: MethodCall((
+                                                      condition: Call((
                                                           raw_loc: "271..280",
                                                           start: "Ln 12, Col 12",
                                                           end: "Ln 12, Col 21",
@@ -556,7 +556,7 @@ ast: |-
                                                   end: "Ln 15, Col 32",
                                                   src: "return num.UnaryMinus()",
                                                   data: (
-                                                      value: Some(MethodCall((
+                                                      value: Some(Call((
                                                           raw_loc: "336..352",
                                                           start: "Ln 15, Col 16",
                                                           end: "Ln 15, Col 32",
@@ -666,7 +666,7 @@ ast: |-
                                           id: "Real",
                                       ),
                                   )),
-                                  body: Some(Expr(MethodCall((
+                                  body: Some(Expr(Call((
                                       raw_loc: "394..411",
                                       start: "Ln 18, Col 33",
                                       end: "Ln 18, Col 50",
@@ -705,7 +705,7 @@ ast: |-
                                               src: "(Abs(xMul))",
                                               data: (
                                                   exprs: [
-                                                      MethodCall((
+                                                      Call((
                                                           raw_loc: "401..410",
                                                           start: "Ln 18, Col 40",
                                                           end: "Ln 18, Col 49",
@@ -808,7 +808,7 @@ ast: |-
                                           id: "Real",
                                       ),
                                   )),
-                                  body: Some(Expr(MethodCall((
+                                  body: Some(Expr(Call((
                                       raw_loc: "444..461",
                                       start: "Ln 19, Col 33",
                                       end: "Ln 19, Col 50",
@@ -847,7 +847,7 @@ ast: |-
                                               src: "(Abs(yMul))",
                                               data: (
                                                   exprs: [
-                                                      MethodCall((
+                                                      Call((
                                                           raw_loc: "451..460",
                                                           start: "Ln 19, Col 40",
                                                           end: "Ln 19, Col 49",
@@ -998,7 +998,7 @@ ast: |-
                                                               id: "xCheck",
                                                           ),
                                                       ),
-                                                      expr: MethodCall((
+                                                      expr: Call((
                                                           raw_loc: "535..577",
                                                           start: "Ln 22, Col 22",
                                                           end: "Ln 22, Col 64",
@@ -1010,7 +1010,7 @@ ast: |-
                                                                   end: "Ln 22, Col 51",
                                                                   src: "Sign(x).Equals(Sign(xMul)).Or",
                                                                   data: (
-                                                                      expr: MethodCall((
+                                                                      expr: Call((
                                                                           raw_loc: "535..561",
                                                                           start: "Ln 22, Col 22",
                                                                           end: "Ln 22, Col 48",
@@ -1022,7 +1022,7 @@ ast: |-
                                                                                   end: "Ln 22, Col 36",
                                                                                   src: "Sign(x).Equals",
                                                                                   data: (
-                                                                                      expr: MethodCall((
+                                                                                      expr: Call((
                                                                                           raw_loc: "535..542",
                                                                                           start: "Ln 22, Col 22",
                                                                                           end: "Ln 22, Col 29",
@@ -1076,7 +1076,7 @@ ast: |-
                                                                                   src: "(Sign(xMul))",
                                                                                   data: (
                                                                                       exprs: [
-                                                                                          MethodCall((
+                                                                                          Call((
                                                                                               raw_loc: "550..560",
                                                                                               start: "Ln 22, Col 37",
                                                                                               end: "Ln 22, Col 47",
@@ -1135,7 +1135,7 @@ ast: |-
                                                                   src: "(x.Equals(0))",
                                                                   data: (
                                                                       exprs: [
-                                                                          MethodCall((
+                                                                          Call((
                                                                               raw_loc: "565..576",
                                                                               start: "Ln 22, Col 52",
                                                                               end: "Ln 22, Col 63",
@@ -1210,7 +1210,7 @@ ast: |-
                                                               id: "yCheck",
                                                           ),
                                                       ),
-                                                      expr: MethodCall((
+                                                      expr: Call((
                                                           raw_loc: "599..641",
                                                           start: "Ln 23, Col 22",
                                                           end: "Ln 23, Col 64",
@@ -1222,7 +1222,7 @@ ast: |-
                                                                   end: "Ln 23, Col 51",
                                                                   src: "Sign(y).Equals(Sign(yMul)).Or",
                                                                   data: (
-                                                                      expr: MethodCall((
+                                                                      expr: Call((
                                                                           raw_loc: "599..625",
                                                                           start: "Ln 23, Col 22",
                                                                           end: "Ln 23, Col 48",
@@ -1234,7 +1234,7 @@ ast: |-
                                                                                   end: "Ln 23, Col 36",
                                                                                   src: "Sign(y).Equals",
                                                                                   data: (
-                                                                                      expr: MethodCall((
+                                                                                      expr: Call((
                                                                                           raw_loc: "599..606",
                                                                                           start: "Ln 23, Col 22",
                                                                                           end: "Ln 23, Col 29",
@@ -1288,7 +1288,7 @@ ast: |-
                                                                                   src: "(Sign(yMul))",
                                                                                   data: (
                                                                                       exprs: [
-                                                                                          MethodCall((
+                                                                                          Call((
                                                                                               raw_loc: "614..624",
                                                                                               start: "Ln 23, Col 37",
                                                                                               end: "Ln 23, Col 47",
@@ -1347,7 +1347,7 @@ ast: |-
                                                                   src: "(y.Equals(0))",
                                                                   data: (
                                                                       exprs: [
-                                                                          MethodCall((
+                                                                          Call((
                                                                               raw_loc: "629..640",
                                                                               start: "Ln 23, Col 52",
                                                                               end: "Ln 23, Col 63",
@@ -1413,7 +1413,7 @@ ast: |-
                                                   end: "Ln 24, Col 34",
                                                   src: "return xCheck.And(yCheck)",
                                                   data: (
-                                                      value: Some(MethodCall((
+                                                      value: Some(Call((
                                                           raw_loc: "657..675",
                                                           start: "Ln 24, Col 16",
                                                           end: "Ln 24, Col 34",
@@ -1721,7 +1721,7 @@ ast: |-
                                                   end: "Ln 31, Col 12",
                                                   src: "if CheckSign(x, y) then\n            return CalcHit(x, y, r)\n        end",
                                                   data: (
-                                                      condition: MethodCall((
+                                                      condition: Call((
                                                           raw_loc: "819..834",
                                                           start: "Ln 29, Col 12",
                                                           end: "Ln 29, Col 27",
@@ -1779,7 +1779,7 @@ ast: |-
                                                                       end: "Ln 30, Col 36",
                                                                       src: "return CalcHit(x, y, r)",
                                                                       data: (
-                                                                          value: Some(MethodCall((
+                                                                          value: Some(Call((
                                                                               raw_loc: "859..875",
                                                                               start: "Ln 30, Col 20",
                                                                               end: "Ln 30, Col 36",
@@ -2178,7 +2178,7 @@ ast: |-
                                                   end: "Ln 43, Col 72",
                                                   src: "return Abs(x).LessOrEqual(Rx(r)).And(Abs(y).LessOrEqual(Ry(r)))",
                                                   data: (
-                                                      value: Some(MethodCall((
+                                                      value: Some(Call((
                                                           raw_loc: "1131..1187",
                                                           start: "Ln 43, Col 16",
                                                           end: "Ln 43, Col 72",
@@ -2190,7 +2190,7 @@ ast: |-
                                                                   end: "Ln 43, Col 45",
                                                                   src: "Abs(x).LessOrEqual(Rx(r)).And",
                                                                   data: (
-                                                                      expr: MethodCall((
+                                                                      expr: Call((
                                                                           raw_loc: "1131..1156",
                                                                           start: "Ln 43, Col 16",
                                                                           end: "Ln 43, Col 41",
@@ -2202,7 +2202,7 @@ ast: |-
                                                                                   end: "Ln 43, Col 34",
                                                                                   src: "Abs(x).LessOrEqual",
                                                                                   data: (
-                                                                                      expr: MethodCall((
+                                                                                      expr: Call((
                                                                                           raw_loc: "1131..1137",
                                                                                           start: "Ln 43, Col 16",
                                                                                           end: "Ln 43, Col 22",
@@ -2256,7 +2256,7 @@ ast: |-
                                                                                   src: "(Rx(r))",
                                                                                   data: (
                                                                                       exprs: [
-                                                                                          MethodCall((
+                                                                                          Call((
                                                                                               raw_loc: "1150..1155",
                                                                                               start: "Ln 43, Col 35",
                                                                                               end: "Ln 43, Col 40",
@@ -2315,7 +2315,7 @@ ast: |-
                                                                   src: "(Abs(y).LessOrEqual(Ry(r)))",
                                                                   data: (
                                                                       exprs: [
-                                                                          MethodCall((
+                                                                          Call((
                                                                               raw_loc: "1161..1186",
                                                                               start: "Ln 43, Col 46",
                                                                               end: "Ln 43, Col 71",
@@ -2327,7 +2327,7 @@ ast: |-
                                                                                       end: "Ln 43, Col 64",
                                                                                       src: "Abs(y).LessOrEqual",
                                                                                       data: (
-                                                                                          expr: MethodCall((
+                                                                                          expr: Call((
                                                                                               raw_loc: "1161..1167",
                                                                                               start: "Ln 43, Col 46",
                                                                                               end: "Ln 43, Col 52",
@@ -2381,7 +2381,7 @@ ast: |-
                                                                                       src: "(Ry(r))",
                                                                                       data: (
                                                                                           exprs: [
-                                                                                              MethodCall((
+                                                                                              Call((
                                                                                                   raw_loc: "1180..1185",
                                                                                                   start: "Ln 43, Col 65",
                                                                                                   end: "Ln 43, Col 70",
@@ -2749,7 +2749,7 @@ ast: |-
                                                   end: "Ln 54, Col 72",
                                                   src: "return x.Mult(x).Plus(y.Mult(y)).LessOrEqual(Rx(r).Mult(Rx(r)))",
                                                   data: (
-                                                      value: Some(MethodCall((
+                                                      value: Some(Call((
                                                           raw_loc: "1412..1468",
                                                           start: "Ln 54, Col 16",
                                                           end: "Ln 54, Col 72",
@@ -2761,7 +2761,7 @@ ast: |-
                                                                   end: "Ln 54, Col 53",
                                                                   src: "x.Mult(x).Plus(y.Mult(y)).LessOrEqual",
                                                                   data: (
-                                                                      expr: MethodCall((
+                                                                      expr: Call((
                                                                           raw_loc: "1412..1437",
                                                                           start: "Ln 54, Col 16",
                                                                           end: "Ln 54, Col 41",
@@ -2773,7 +2773,7 @@ ast: |-
                                                                                   end: "Ln 54, Col 30",
                                                                                   src: "x.Mult(x).Plus",
                                                                                   data: (
-                                                                                      expr: MethodCall((
+                                                                                      expr: Call((
                                                                                           raw_loc: "1412..1421",
                                                                                           start: "Ln 54, Col 16",
                                                                                           end: "Ln 54, Col 25",
@@ -2844,7 +2844,7 @@ ast: |-
                                                                                   src: "(y.Mult(y))",
                                                                                   data: (
                                                                                       exprs: [
-                                                                                          MethodCall((
+                                                                                          Call((
                                                                                               raw_loc: "1427..1436",
                                                                                               start: "Ln 54, Col 31",
                                                                                               end: "Ln 54, Col 40",
@@ -2920,7 +2920,7 @@ ast: |-
                                                                   src: "(Rx(r).Mult(Rx(r)))",
                                                                   data: (
                                                                       exprs: [
-                                                                          MethodCall((
+                                                                          Call((
                                                                               raw_loc: "1450..1467",
                                                                               start: "Ln 54, Col 54",
                                                                               end: "Ln 54, Col 71",
@@ -2932,7 +2932,7 @@ ast: |-
                                                                                       end: "Ln 54, Col 64",
                                                                                       src: "Rx(r).Mult",
                                                                                       data: (
-                                                                                          expr: MethodCall((
+                                                                                          expr: Call((
                                                                                               raw_loc: "1450..1455",
                                                                                               start: "Ln 54, Col 54",
                                                                                               end: "Ln 54, Col 59",
@@ -2986,7 +2986,7 @@ ast: |-
                                                                                       src: "(Rx(r))",
                                                                                       data: (
                                                                                           exprs: [
-                                                                                              MethodCall((
+                                                                                              Call((
                                                                                                   raw_loc: "1461..1466",
                                                                                                   start: "Ln 54, Col 65",
                                                                                                   end: "Ln 54, Col 70",
@@ -3175,7 +3175,7 @@ ast: |-
                                                               id: "quadrants",
                                                           ),
                                                       ),
-                                                      expr: MethodCall((
+                                                      expr: Call((
                                                           raw_loc: "1565..1581",
                                                           start: "Ln 60, Col 25",
                                                           end: "Ln 60, Col 41",
@@ -3213,7 +3213,7 @@ ast: |-
                                                       )),
                                                   ),
                                               )),
-                                              Stmt(MethodCall((
+                                              Stmt(Call((
                                                   raw_loc: "1590..1630",
                                                   start: "Ln 61, Col 9",
                                                   end: "Ln 61, Col 49",
@@ -3261,7 +3261,7 @@ ast: |-
                                                                           int: 0,
                                                                       ),
                                                                   ))),
-                                                                  MethodCall((
+                                                                  Call((
                                                                       raw_loc: "1607..1629",
                                                                       start: "Ln 61, Col 26",
                                                                       end: "Ln 61, Col 48",
@@ -3311,7 +3311,7 @@ ast: |-
                                                       ),
                                                   ),
                                               ))),
-                                              Stmt(MethodCall((
+                                              Stmt(Call((
                                                   raw_loc: "1639..1680",
                                                   start: "Ln 62, Col 9",
                                                   end: "Ln 62, Col 50",
@@ -3359,7 +3359,7 @@ ast: |-
                                                                           int: 1,
                                                                       ),
                                                                   ))),
-                                                                  MethodCall((
+                                                                  Call((
                                                                       raw_loc: "1656..1679",
                                                                       start: "Ln 62, Col 26",
                                                                       end: "Ln 62, Col 49",
@@ -3409,7 +3409,7 @@ ast: |-
                                                       ),
                                                   ),
                                               ))),
-                                              Stmt(MethodCall((
+                                              Stmt(Call((
                                                   raw_loc: "1689..1733",
                                                   start: "Ln 63, Col 9",
                                                   end: "Ln 63, Col 53",
@@ -3457,7 +3457,7 @@ ast: |-
                                                                           int: 2,
                                                                       ),
                                                                   ))),
-                                                                  MethodCall((
+                                                                  Call((
                                                                       raw_loc: "1706..1732",
                                                                       start: "Ln 63, Col 26",
                                                                       end: "Ln 63, Col 52",
@@ -3507,7 +3507,7 @@ ast: |-
                                                       ),
                                                   ),
                                               ))),
-                                              Stmt(MethodCall((
+                                              Stmt(Call((
                                                   raw_loc: "1742..1785",
                                                   start: "Ln 64, Col 9",
                                                   end: "Ln 64, Col 52",
@@ -3555,7 +3555,7 @@ ast: |-
                                                                           int: 3,
                                                                       ),
                                                                   ))),
-                                                                  MethodCall((
+                                                                  Call((
                                                                       raw_loc: "1759..1784",
                                                                       start: "Ln 64, Col 26",
                                                                       end: "Ln 64, Col 51",
@@ -3637,7 +3637,7 @@ ast: |-
                                                   end: "Ln 71, Col 12",
                                                   src: "while i.Less(4) loop\n            if quadrants.get(i).CheckHit(x, y, r) then\n                return true\n            end\n        end",
                                                   data: (
-                                                      condition: MethodCall((
+                                                      condition: Call((
                                                           raw_loc: "1819..1828",
                                                           start: "Ln 67, Col 15",
                                                           end: "Ln 67, Col 24",
@@ -3703,7 +3703,7 @@ ast: |-
                                                                       end: "Ln 70, Col 16",
                                                                       src: "if quadrants.get(i).CheckHit(x, y, r) then\n                return true\n            end",
                                                                       data: (
-                                                                          condition: MethodCall((
+                                                                          condition: Call((
                                                                               raw_loc: "1849..1883",
                                                                               start: "Ln 68, Col 16",
                                                                               end: "Ln 68, Col 50",
@@ -3715,7 +3715,7 @@ ast: |-
                                                                                       end: "Ln 68, Col 41",
                                                                                       src: "quadrants.get(i).CheckHit",
                                                                                       data: (
-                                                                                          expr: MethodCall((
+                                                                                          expr: Call((
                                                                                               raw_loc: "1849..1865",
                                                                                               start: "Ln 68, Col 16",
                                                                                               end: "Ln 68, Col 32",

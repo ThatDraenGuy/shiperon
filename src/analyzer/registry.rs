@@ -208,6 +208,16 @@ impl<Id: RegistryId, V> IntoIterator for Registry<Id, V> {
     }
 }
 
+impl<Id: RegistryId, V> FromIterator<(Id, V)> for Registry<Id, V> {
+    fn from_iter<T: IntoIterator<Item = (Id, V)>>(iter: T) -> Self {
+        let mut registry = Self::default();
+        for (id, value) in iter {
+            registry.insert(id, value);
+        }
+        registry
+    }
+}
+
 pub struct NameRegistryBuilder<'key, Id: RegistryId, V> {
     registry: NameRegistry<'key, Id, V>,
     id_provider: <Id as HasProvider>::Provider,
@@ -294,6 +304,10 @@ impl<'key, Id: RegistryId, V: 'key> NameRegistry<'key, Id, V> {
         self.id_to_value.iter()
     }
 
+    pub fn registry(&self) -> &Registry<Id, V> {
+        &self.id_to_value
+    }
+
     pub fn transform<V2, Fp>(self, f: Fp) -> NameRegistry<'key, Id, V2>
     where
         Fp: FnMut(Id, V) -> V2,
@@ -333,9 +347,11 @@ impl<'key, Id: RegistryId, V: 'key> Default for NameRegistry<'key, Id, V> {
 
 mod class {
     use super::{
-        HasProvider, InnerRegistryId, NameRegistry, NameRegistryBuilder, SimpleIdProvider,
+        HasProvider, InnerRegistryId, NameRegistry, NameRegistryBuilder, Registry, RegistryBuilder,
+        SimpleIdProvider,
     };
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum LibClassId {
         Class,
         AnyValue,
@@ -345,12 +361,28 @@ mod class {
         Boolean,
         Array,
         List,
+        String,
+        Char,
     }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum ClassId {
         User(UserClassId),
         Lib(LibClassId),
         Invalid,
     }
+
+    impl From<UserClassId> for ClassId {
+        fn from(value: UserClassId) -> Self {
+            Self::User(value)
+        }
+    }
+    impl From<LibClassId> for ClassId {
+        fn from(value: LibClassId) -> Self {
+            Self::Lib(value)
+        }
+    }
+
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct UserClassId(u32);
     impl UserClassId {}
@@ -370,8 +402,10 @@ mod class {
         type Provider = SimpleIdProvider<UserClassId>;
     }
 
-    pub type ClassRegistry<'key, V> = NameRegistry<'key, UserClassId, V>;
-    pub type ClassRegistryBuilder<'key, V> = NameRegistryBuilder<'key, UserClassId, V>;
+    pub type ClassNameRegistry<'key, V> = NameRegistry<'key, UserClassId, V>;
+    pub type ClassNameRegistryBuilder<'key, V> = NameRegistryBuilder<'key, UserClassId, V>;
+    pub type ClassRegistry<V> = Registry<UserClassId, V>;
+    pub type ClassRegistryBuilder<V> = RegistryBuilder<UserClassId, V>;
 }
 pub use class::*;
 
@@ -419,16 +453,14 @@ mod method {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct MethodId(MethodNameId, MethodOverloadId);
 
-    pub type MethodRegistry<'key, V> =
+    pub type MethodNameRegistry<'key, V> =
         NameRegistry<'key, MethodNameId, Registry<MethodOverloadId, V>>;
-    impl<'key, V> MethodRegistry<'key, V> {
-        #[inline]
-        pub fn get_method(&self, id: &MethodId) -> &V {
-            self.get(&id.0).get(&id.1)
-        }
-    }
-    pub type MethodRegistryBuilder<'key, V> =
+    pub type MethodNameRegistryBuilder<'key, V> =
         NameRegistryBuilder<'key, MethodNameId, RegistryBuilder<MethodOverloadId, V>>;
+
+    pub type MethodRegistry<V> = Registry<MethodNameId, Registry<MethodOverloadId, V>>;
+    pub type MethodRegistryBuilder<V> =
+        RegistryBuilder<MethodNameId, RegistryBuilder<MethodOverloadId, V>>;
 }
 pub use method::*;
 
@@ -458,7 +490,8 @@ pub use constructor::*;
 
 mod field {
     use super::{
-        HasProvider, InnerRegistryId, NameRegistry, NameRegistryBuilder, SimpleIdProvider,
+        HasProvider, InnerRegistryId, NameRegistry, NameRegistryBuilder, Registry, RegistryBuilder,
+        SimpleIdProvider,
     };
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -477,7 +510,9 @@ mod field {
     impl HasProvider for FieldId {
         type Provider = SimpleIdProvider<FieldId>;
     }
-    pub type FieldRegistry<'key, V> = NameRegistry<'key, FieldId, V>;
-    pub type FieldRegistryBuilder<'key, V> = NameRegistryBuilder<'key, FieldId, V>;
+    pub type FieldNameRegistry<'key, V> = NameRegistry<'key, FieldId, V>;
+    pub type FieldNameRegistryBuilder<'key, V> = NameRegistryBuilder<'key, FieldId, V>;
+    pub type FieldRegistry<V> = Registry<FieldId, V>;
+    pub type FieldRegistryBuilder<V> = RegistryBuilder<FieldId, V>;
 }
 pub use field::*;

@@ -75,7 +75,7 @@ ast: |-
                                                               id: "sum",
                                                           ),
                                                       ),
-                                                      expr: MethodCall((
+                                                      expr: Call((
                                                           raw_loc: "056..066",
                                                           start: "Ln 3, Col 18",
                                                           end: "Ln 3, Col 28",
@@ -128,7 +128,7 @@ ast: |-
                                                               id: "limit",
                                                           ),
                                                       ),
-                                                      expr: MethodCall((
+                                                      expr: Call((
                                                           raw_loc: "086..097",
                                                           start: "Ln 4, Col 20",
                                                           end: "Ln 4, Col 31",
@@ -198,7 +198,7 @@ ast: |-
                                                   end: "Ln 10, Col 12",
                                                   src: "while i.Less(limit) loop\n            if i.Rem(2).Equal(0) then\n                sum := sum.Plus(i)\n            end\n        end",
                                                   data: (
-                                                      condition: MethodCall((
+                                                      condition: Call((
                                                           raw_loc: "131..144",
                                                           start: "Ln 6, Col 15",
                                                           end: "Ln 6, Col 28",
@@ -264,7 +264,7 @@ ast: |-
                                                                       end: "Ln 9, Col 16",
                                                                       src: "if i.Rem(2).Equal(0) then\n                sum := sum.Plus(i)\n            end",
                                                                       data: (
-                                                                          condition: MethodCall((
+                                                                          condition: Call((
                                                                               raw_loc: "165..182",
                                                                               start: "Ln 7, Col 16",
                                                                               end: "Ln 7, Col 33",
@@ -276,7 +276,7 @@ ast: |-
                                                                                       end: "Ln 7, Col 30",
                                                                                       src: "i.Rem(2).Equal",
                                                                                       data: (
-                                                                                          expr: MethodCall((
+                                                                                          expr: Call((
                                                                                               raw_loc: "165..173",
                                                                                               start: "Ln 7, Col 16",
                                                                                               end: "Ln 7, Col 24",
@@ -383,7 +383,7 @@ ast: |-
                                                                                                       id: "sum",
                                                                                                   ),
                                                                                               )),
-                                                                                              value: MethodCall((
+                                                                                              value: Call((
                                                                                                   raw_loc: "211..222",
                                                                                                   start: "Ln 8, Col 24",
                                                                                                   end: "Ln 8, Col 35",

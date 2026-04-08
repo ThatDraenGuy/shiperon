@@ -163,7 +163,7 @@ pub enum ShipStmtAll<'src> {
     While(Rc<ShipWhileStmt<'src>>),
     If(Rc<ShipIfStmt<'src>>),
     Return(Rc<ShipReturnStmt<'src>>),
-    MethodCall(Rc<ShipMethodCallExpr<'src>>),
+    Call(Rc<ShipCallExpr<'src>>),
 }
 
 impl<'src> Display for ShipStmtAll<'src> {
@@ -173,7 +173,7 @@ impl<'src> Display for ShipStmtAll<'src> {
             ShipStmtAll::While(node) => node.fmt(f),
             ShipStmtAll::If(node) => node.fmt(f),
             ShipStmtAll::Return(node) => node.fmt(f),
-            ShipStmtAll::MethodCall(node) => node.fmt(f),
+            ShipStmtAll::Call(node) => node.fmt(f),
         }
     }
 }
@@ -229,7 +229,7 @@ pub type ShipReturnStmt<'src> = Node<'src, ReturnStmtData<'src>>;
 #[derive(Debug, Clone, Serialize)]
 pub enum ShipExprAll<'src> {
     MemberAccess(Rc<ShipMemberAccessExpr<'src>>),
-    MethodCall(Rc<ShipMethodCallExpr<'src>>),
+    Call(Rc<ShipCallExpr<'src>>),
     Primary(ShipPrimaryAll<'src>),
     ClassCast(Rc<ShipClassCastExpr<'src>>),
 }
@@ -237,7 +237,7 @@ impl<'src> WithParserLoc for ShipExprAll<'src> {
     fn loc(&self) -> crate::parser::ParserLoc {
         match self {
             ShipExprAll::MemberAccess(node) => node.loc(),
-            ShipExprAll::MethodCall(node) => node.loc(),
+            ShipExprAll::Call(node) => node.loc(),
             ShipExprAll::Primary(primary) => primary.loc(),
             ShipExprAll::ClassCast(node) => node.loc(),
         }
@@ -248,7 +248,7 @@ impl<'src> Display for ShipExprAll<'src> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ShipExprAll::MemberAccess(node) => node.fmt(f),
-            ShipExprAll::MethodCall(node) => node.fmt(f),
+            ShipExprAll::Call(node) => node.fmt(f),
             ShipExprAll::Primary(primary) => primary.fmt(f),
             ShipExprAll::ClassCast(node) => node.fmt(f),
         }
@@ -330,16 +330,16 @@ impl<'src> NodeData for MemberAccessExprData<'src> {
 pub type ShipMemberAccessExpr<'src> = Node<'src, MemberAccessExprData<'src>>;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct MethodCallExprData<'src> {
+pub struct CallExprData<'src> {
     pub expr: ShipCallableExprAll<'src>,
     pub args: Rc<ShipArgs<'src>>,
 }
-impl<'src> NodeData for MethodCallExprData<'src> {
+impl<'src> NodeData for CallExprData<'src> {
     fn name() -> &'static str {
         "MethodCall"
     }
 }
-pub type ShipMethodCallExpr<'src> = Node<'src, MethodCallExprData<'src>>;
+pub type ShipCallExpr<'src> = Node<'src, CallExprData<'src>>;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ArgsData<'src> {

@@ -1,3 +1,4 @@
+pub mod body;
 pub mod expr;
 pub mod field;
 pub mod registry;
@@ -6,7 +7,11 @@ pub mod signature;
 use std::rc::Rc;
 
 use crate::{
-    ast::ShipProgram,
+    analyzer::{
+        field::{ClassWithFieldRegistry, FieldError},
+        signature::ConsError,
+    },
+    ast::{ShipId, ShipProgram},
     diagnostics::{Diagnostic, Renderable},
 };
 
@@ -22,25 +27,44 @@ impl<'src> Analyzer<'src> {
     pub fn analyze(&mut self) {
         let mut errors = Vec::new();
 
-        //1. class registry + inheritance. Errors: circular dependency, undefiend parent
         let class_defs = ClassDefRegistry::new(&self.ast.classes, &mut errors);
         let class_signatures = ClassSignatureRegistry::new(class_defs, &mut errors);
         let checked_signatures = class_signatures.check_inheritance(&mut errors);
-
-        //2. class view (field names & method+cons types). Errors: circular field dependency, duplicate fields/methods/cons
-        //3. expressions (fields)???
+        let with_fields = ClassWithFieldRegistry::new(checked_signatures, &mut errors);
     }
 }
 
 #[derive(Debug, Clone, Display, From)]
 pub enum AnalysisError<'src> {
+    #[display("{_0}")]
+    General(GeneralError<'src>),
+    #[display("{_0}")]
     Class(ClassError<'src>),
+    #[display("{_0}")]
+    Field(FieldError<'src>),
+    #[display("{_0}")]
+    Cons(ConsError<'src>),
 }
 
 impl<'src> Renderable<'src> for AnalysisError<'src> {
     fn render(&self, src: &impl crate::ByteSource<'src>) -> String {
         match self {
             AnalysisError::Class(class_error) => class_error.render(src),
+            AnalysisError::Field(field_error) => field_error.render(src),
+            AnalysisError::General(general_error) => general_error.render(src),
+            AnalysisError::Cons(cons_error) => cons_error.render(src),
         }
+    }
+}
+
+#[derive(Debug, Clone, Display)]
+pub enum GeneralError<'src> {
+    #[display("undefined class with name `{cls_name}`")]
+    UndefinedClass { cls_name: Rc<ShipId<'src>> },
+}
+
+impl<'src> Renderable<'src> for GeneralError<'src> {
+    fn render(&self, src: &impl crate::ByteSource<'src>) -> String {
+        todo!()
     }
 }

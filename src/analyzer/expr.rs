@@ -14,3 +14,10 @@ pub struct ConsExpr {
 }
 
 pub enum Expr {}
+
+pub struct ExprModel {
+    pub expr_type: ClassId,
+    pub expr: Expr,
+}
+
+impl ExprModel {}
