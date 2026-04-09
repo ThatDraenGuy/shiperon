@@ -48,14 +48,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             string: args.feature.iter().any(|f| *f == Feature::String || *f == Feature::All),
             super_kw: args.feature.iter().any(|f| *f == Feature::SuperKw || *f == Feature::All),
         },
+        internal: false,
     };
 
     println!("{config:?}");
 
     let input = read_to_string(&args.src)?;
-    let (_registry, diagnostics, src) = shiperon::process(&input, config);
-    for item in &diagnostics {
-        println!("{}\n", item.render(&src));
-    }
+    shiperon::process(&input, config);
+
     Ok(())
 }

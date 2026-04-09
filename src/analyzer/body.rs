@@ -11,10 +11,8 @@ use crate::{
             ClassId, ClassRegistry, ConsId, ConsRegistry, FieldId, LibClassId, MethodId,
             MethodRegistry, UserClassId, VarId, VarNameRegistryBuilder,
         },
-        signature::{
-            ClassSignature, MethodSignature, ParamsSignature, WithClassSignature,
-            WithMethodSignature,
-        },
+        signature::{WithClassSignature, WithMethodSignature},
+        stdlib::WithStd,
     },
     ast::*,
     diagnostics::Renderable,
@@ -95,7 +93,7 @@ impl<'src> ScopeStack<'src> {
 
     pub fn find_var<'a, V: WithClassSignature<'src> + WithClassFields>(
         &'a self,
-        registry: &'a ClassRegistry<V>,
+        registry: &'a WithStd<'src, &ClassRegistry<V>>,
         name: &Rc<ShipId<'src>>,
     ) -> Option<ScopeVar<'a>> {
         for scope in &self.inner {
@@ -116,7 +114,7 @@ pub struct Body {
 }
 impl Body {
     fn resolve<'src>(
-        registry: &ClassWithFieldRegistry<'src>,
+        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
         scopes: &mut ScopeStack<'src>,
         body: &Rc<ShipBody<'src>>,
         errors: &mut Vec<AnalysisError<'src>>,
@@ -305,7 +303,7 @@ pub struct ConsBody {
 
 impl ConsBody {
     pub fn resolve<'src>(
-        registry: &ClassWithFieldRegistry<'src>,
+        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
         cls_id: UserClassId,
         cons_id: ConsId,
         def: &Rc<ShipConsDef<'src>>,
@@ -324,7 +322,10 @@ impl ConsBody {
         }
 
         let mut scopes = ScopeStack::new_cons(cls_id, cons_id, param_registry);
-        let body = Body::resolve(registry, &mut scopes, &def.body, errors);
+        let body = match &def.body {
+            ShipConsBodyAll::Body(body) => Body::resolve(registry, &mut scopes, body, errors),
+            ShipConsBodyAll::Generated(node) => todo!(),
+        };
         Self { body }
     }
 }
@@ -337,7 +338,7 @@ pub struct MethodBody {
 
 impl MethodBody {
     pub fn resolve<'src>(
-        registry: &ClassWithFieldRegistry<'src>,
+        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
         cls_id: UserClassId,
         method_id: MethodId,
         def: &Rc<ShipMethodDef<'src>>,
@@ -371,6 +372,7 @@ impl MethodBody {
             Some(ShipMethodBodyAll::Body(body)) => {
                 Body::resolve(registry, &mut scopes, body, errors)
             },
+            Some(ShipMethodBodyAll::Generated(generated)) => todo!(),
             None => todo!(),
         };
         Self { body }

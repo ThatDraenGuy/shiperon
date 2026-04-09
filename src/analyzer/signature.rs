@@ -7,12 +7,13 @@ use derive_more::Display;
 use itertools::Itertools;
 
 use crate::analyzer::stages::Stage1;
+use crate::analyzer::stdlib::WithStd;
 use crate::analyzer::{AnalysisError, GeneralError};
 use crate::ast::{
     ShipArgs, ShipClassDef, ShipClassMemberAll, ShipConsDef, ShipId, ShipMethodDef, ShipParams,
     ShipVarDef,
 };
-use crate::diagnostics::{Diagnostic, ErrorLevel, Reason, Renderable};
+use crate::diagnostics::Renderable;
 use crate::parser::{ParserLoc, WithParserLoc};
 
 pub type ClassDefRegistry<'src> = ClassNameRegistry<'src, Rc<ShipClassDef<'src>>>;
@@ -39,7 +40,11 @@ impl ParamsSignature {
         Self { param_types }
     }
 
-    pub fn matches<'src, V>(&self, arg_types: &[ClassId], registry: &ClassRegistry<V>) -> (bool, u8)
+    pub fn matches<'src, V>(
+        &self,
+        arg_types: &[ClassId],
+        registry: &WithStd<'src, &ClassRegistry<V>>,
+    ) -> (bool, u8)
     where
         V: WithClassSignature<'src>,
     {
@@ -83,7 +88,7 @@ impl<V: WithParamsSignature> ConsRegistry<V> {
     pub fn find_matching_cons<'src, C: WithClassSignature<'src>>(
         &self,
         param_types: &[ClassId],
-        registry: &ClassRegistry<C>,
+        registry: &WithStd<'src, &ClassRegistry<C>>,
         node: &Rc<ShipArgs<'src>>,
     ) -> Result<(ConsId, &V), ConsError<'src>> {
         self.iter()
@@ -140,12 +145,12 @@ impl<T> WithMethodSignature for (T, MethodSignature) {
     }
 }
 
-impl<'a, 'src: 'a, C: WithClassSignature<'src>> ClassRegistry<C> {
+impl<'a, 'src: 'a, C: WithClassSignature<'src>> WithStd<'src, &ClassRegistry<C>> {
     pub fn get_cls_signature(&self, cls_id: &ClassId) -> &ClassSignature<'src> {
         match cls_id {
             ClassId::User(user_class_id) => self.get(user_class_id).class_signature(),
-            ClassId::Lib(lib_class_id) => todo!(),
-            ClassId::Invalid => todo!(),
+            ClassId::Lib(lib_class_id) => self.lib.cls_signature(lib_class_id),
+            ClassId::Invalid => self.lib.invalid_signature(),
         }
     }
     pub fn find_matching_method(
@@ -156,48 +161,36 @@ impl<'a, 'src: 'a, C: WithClassSignature<'src>> ClassRegistry<C> {
         name_node: &Rc<ShipId<'src>>,
         args_node: &Rc<ShipArgs<'src>>,
     ) -> Result<(ClassId, MethodId, &'a MethodSignature), MethodError<'src>> {
-        match cls_id {
-            ClassId::User(user_class_id) => {
-                let signature = self.get(&user_class_id).class_signature();
-                let methods = &signature.methods;
-                let name_id = methods
-                    .get_by_name(name)
-                    .ok_or(MethodError::UndefinedMethod { name: name_node.clone() })?;
-                methods
-                    .get(&name_id)
-                    .iter()
-                    .map(|(overload_id, data)| (overload_id, data.method_signature()))
-                    .filter_map(|(overload_id, method_signature)| {
-                        let (is_match, degree) = method_signature.params.matches(param_types, self);
-                        if is_match { Some((overload_id, degree)) } else { None }
-                    })
-                    .min_by(|fst, snd| fst.1.cmp(&snd.1))
-                    .map(|(overload_id, _degree)| {
-                        let method_id = MethodId::from((name_id, overload_id));
-                        Ok((
-                            cls_id,
-                            method_id,
-                            methods.registry().get_method(&method_id).method_signature(),
-                        ))
-                    })
-                    .unwrap_or_else(|| {
-                        let parent = signature.parent;
-                        if parent == LibClassId::Class.into() {
-                            Err(MethodError::NoOverload { args: args_node.clone() })
-                        } else {
-                            self.find_matching_method(
-                                parent,
-                                name,
-                                param_types,
-                                name_node,
-                                args_node,
-                            )
-                        }
-                    })
-            },
-            ClassId::Lib(lib_class_id) => todo!(),
-            ClassId::Invalid => todo!(),
-        }
+        let signature = self.get_cls_signature(&cls_id);
+        let methods = &signature.methods;
+        let name_id = methods
+            .get_by_name(name)
+            .ok_or(MethodError::UndefinedMethod { name: name_node.clone() })?;
+        methods
+            .get(&name_id)
+            .iter()
+            .map(|(overload_id, data)| (overload_id, data.method_signature()))
+            .filter_map(|(overload_id, method_signature)| {
+                let (is_match, degree) = method_signature.params.matches(param_types, self);
+                if is_match { Some((overload_id, degree)) } else { None }
+            })
+            .min_by(|fst, snd| fst.1.cmp(&snd.1))
+            .map(|(overload_id, _degree)| {
+                let method_id = MethodId::from((name_id, overload_id));
+                Ok((
+                    cls_id,
+                    method_id,
+                    methods.registry().get_method(&method_id).method_signature(),
+                ))
+            })
+            .unwrap_or_else(|| {
+                let parent = signature.parent;
+                if parent == LibClassId::Class.into() || parent == ClassId::Invalid {
+                    Err(MethodError::NoOverload { args: args_node.clone() })
+                } else {
+                    self.find_matching_method(parent, name, param_types, name_node, args_node)
+                }
+            })
     }
 }
 
@@ -248,6 +241,17 @@ pub struct ClassSignature<'src> {
     pub methods: MethodSignatureRegistry<'src>,
     pub fields: FieldNamesRegistry<'src>,
 }
+impl ClassSignature<'static> {
+    pub fn invalid() -> Self {
+        Self {
+            id: ClassId::Invalid,
+            parent: ClassId::Invalid,
+            constructors: Registry::empty(),
+            methods: NameRegistry::empty(),
+            fields: NameRegistry::empty(),
+        }
+    }
+}
 
 pub trait WithClassDef<'src> {
     fn class_def(&self) -> &Rc<ShipClassDef<'src>>;
@@ -269,7 +273,7 @@ impl<'src> WithClassSignature<'src> for ClassSignature<'src> {
     }
 }
 
-impl<'src, V: WithClassSignature<'src>> ClassRegistry<V> {
+impl<'src, V: WithClassSignature<'src>> WithStd<'src, &ClassRegistry<V>> {
     pub fn is_cls_subcls_of<C: Into<ClassId>, P: Into<ClassId>>(
         &self,
         child: C,
@@ -282,16 +286,10 @@ impl<'src, V: WithClassSignature<'src>> ClassRegistry<V> {
             if current == parent {
                 return (true, diff);
             }
-            if current == LibClassId::Class.into() {
+            if current == LibClassId::Class.into() || current == ClassId::Invalid {
                 return (false, diff);
             }
-            let signature = match &current {
-                ClassId::User(user_class_id) => self.get(user_class_id).class_signature(),
-                ClassId::Lib(lib_class_id) => todo!(),
-                ClassId::Invalid => {
-                    return (false, diff);
-                },
-            };
+            let signature = self.get_cls_signature(&current);
             current = signature.parent;
             diff += 1;
         }
@@ -300,32 +298,51 @@ impl<'src, V: WithClassSignature<'src>> ClassRegistry<V> {
 
 pub type ClassSignatureRegistry<'src> = NameRegistry<'src, UserClassId, Stage1<'src>>;
 
-impl<'src> ClassSignatureRegistry<'src> {
-    fn get_user_class(
-        defs: &ClassDefRegistry<'src>,
+impl<'src, V> ClassNameRegistry<'src, V> {
+    pub fn get_user_class(
+        &self,
         cls_name: &Rc<ShipId<'src>>,
     ) -> Result<UserClassId, AnalysisError<'src>> {
-        match defs.get_by_name(cls_name.id) {
+        match self.get_by_name(cls_name.id) {
             Some(cls_id) => Ok(cls_id),
             None => Err(GeneralError::UndefinedClass { cls_name: cls_name.clone() }.into()),
         }
     }
 
-    fn get_class(
-        defs: &ClassDefRegistry<'src>,
+    pub fn get_class(&self, cls_name: &Rc<ShipId<'src>>) -> Result<ClassId, AnalysisError<'src>> {
+        //TODO: lib classes
+        Ok(match cls_name.id {
+            "Class" => LibClassId::Class.into(),
+            "AnyRef" => LibClassId::AnyRef.into(),
+            "AnyValue" => LibClassId::AnyValue.into(),
+            "Integer" => LibClassId::Integer.into(),
+            "Real" => LibClassId::Real.into(),
+            "Boolean" => LibClassId::Boolean.into(),
+            "Char" => LibClassId::Char.into(),
+            "String" => LibClassId::String.into(),
+            "Array" => LibClassId::Array.into(),
+            _ => match Self::get_user_class(self, cls_name) {
+                Ok(user_class) => ClassId::User(user_class),
+                Err(e) => return Err(e),
+            },
+        })
+    }
+}
+
+impl<'src> ClassSignatureRegistry<'src> {
+    fn get_class_with_err<V>(
+        defs: &ClassNameRegistry<'src, V>,
         cls_name: &Rc<ShipId<'src>>,
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> ClassId {
-        //TODO: lib classes
-        match Self::get_user_class(defs, cls_name) {
-            Ok(user_class) => ClassId::User(user_class),
+        match defs.get_class(cls_name) {
+            Ok(cls) => cls,
             Err(e) => {
                 errors.push(e);
                 ClassId::Invalid
             },
         }
     }
-
     fn resolve_params(
         defs: &ClassDefRegistry<'src>,
         params_node: &Rc<ShipParams<'src>>,
@@ -337,7 +354,7 @@ impl<'src> ClassSignatureRegistry<'src> {
                 .iter()
                 .map(|param| {
                     let cls_name = &param.var_type;
-                    Self::get_class(defs, cls_name, errors)
+                    Self::get_class_with_err(defs, cls_name, errors)
                 })
                 .collect(),
         )
@@ -352,7 +369,7 @@ impl<'src> ClassSignatureRegistry<'src> {
         let return_type = method_node
             .return_type
             .as_ref()
-            .map(|cls_name| Self::get_class(defs, cls_name, errors));
+            .map(|cls_name| Self::get_class_with_err(defs, cls_name, errors));
         MethodSignature { params, return_type }
     }
 
@@ -362,7 +379,7 @@ impl<'src> ClassSignatureRegistry<'src> {
                 let parent = def
                     .parent_id
                     .as_ref()
-                    .map(|cls_name| Self::get_class(defs, cls_name, errors))
+                    .map(|cls_name| Self::get_class_with_err(defs, cls_name, errors))
                     .unwrap_or(ClassId::Lib(LibClassId::AnyRef));
 
                 let mut constructors = ConsSignatureRegistryBuilder::default();

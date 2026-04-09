@@ -12,12 +12,10 @@ use crate::{
         },
         signature::{ClassSignature, ClassSignatureRegistry, WithClassSignature},
         stages::Stage2,
+        stdlib::WithStd,
     },
-    ast::{
-        ShipCallExpr, ShipCallableExprAll, ShipClassDef, ShipExprAll, ShipId, ShipPrimaryAll,
-        ShipVarDef,
-    },
-    diagnostics::{Diagnostic, ErrorLevel, Reason, Renderable},
+    ast::{ShipCallExpr, ShipCallableExprAll, ShipExprAll, ShipId, ShipPrimaryAll, ShipVarDef},
+    diagnostics::Renderable,
     parser::WithParserLoc,
 };
 
@@ -82,7 +80,7 @@ impl FieldModel {
     }
 
     fn resolve_call<'src>(
-        registry: &ClassSignatureRegistry<'src>,
+        registry: &WithStd<'src, &ClassSignatureRegistry<'src>>,
         signature: &ClassSignature<'src>,
         call: &Rc<ShipCallExpr<'src>>,
         errors: &mut Vec<AnalysisError<'src>>,
@@ -125,7 +123,7 @@ impl FieldModel {
                                 .get(&cls_id)
                                 .class_signature()
                                 .constructors
-                                .find_matching_cons(&arg_types, registry.registry(), &call.args)
+                                .find_matching_cons(&arg_types, &registry.registry(), &call.args)
                                 .map(|(cons_id, _data)| FieldModel {
                                     field_type: cls_id.into(),
                                     init_expr: FieldExpr::Cons {
@@ -153,7 +151,7 @@ impl FieldModel {
     }
 
     pub fn resolve<'src>(
-        registry: &ClassSignatureRegistry<'src>,
+        registry: &WithStd<'src, &ClassSignatureRegistry<'src>>,
         signature: &ClassSignature<'src>,
         id: FieldId,
         def: &Rc<ShipVarDef<'src>>,
@@ -187,12 +185,12 @@ impl WithClassFields for ClassFields {
         self
     }
 }
-impl<'src, V: WithClassFields + WithClassSignature<'src>> ClassRegistry<V> {
+impl<'src, V: WithClassFields + WithClassSignature<'src>> WithStd<'src, &ClassRegistry<V>> {
     pub fn get_cls_fields(&self, cls_id: &ClassId) -> &ClassFields {
         match cls_id {
             ClassId::User(user_class_id) => self.get(user_class_id).class_fields(),
-            ClassId::Lib(lib_class_id) => todo!(),
-            ClassId::Invalid => todo!(),
+            ClassId::Lib(lib_class_id) => self.lib.cls_fields(lib_class_id),
+            ClassId::Invalid => self.lib.invalid_fields(),
         }
     }
 
@@ -217,31 +215,33 @@ pub type ClassWithFieldRegistry<'src> = ClassNameRegistry<'src, Stage2<'src>>;
 
 impl<'src> ClassWithFieldRegistry<'src> {
     pub fn new(
-        signatures: ClassSignatureRegistry<'src>,
+        signatures: WithStd<'src, ClassSignatureRegistry<'src>>,
         errors: &mut Vec<AnalysisError<'src>>,
-    ) -> Self {
-        signatures.transform_with_self(
-            |signatures, _cls_id, data| ClassFields {
-                registry: data
-                    .class_signature()
-                    .fields
-                    .iter()
-                    .map(|(field_id, def)| {
-                        (
-                            field_id,
-                            FieldModel::resolve(
-                                signatures,
-                                data.class_signature(),
+    ) -> WithStd<'src, Self> {
+        signatures.map(|signatures, lib| {
+            signatures.transform_with_self(
+                |signatures, _cls_id, data| ClassFields {
+                    registry: data
+                        .class_signature()
+                        .fields
+                        .iter()
+                        .map(|(field_id, def)| {
+                            (
                                 field_id,
-                                def,
-                                errors,
-                            ),
-                        )
-                    })
-                    .collect(),
-            },
-            |data, fields| (data.0, data.1, fields),
-        )
+                                FieldModel::resolve(
+                                    &WithStd::wrap(lib.clone(), signatures),
+                                    data.class_signature(),
+                                    field_id,
+                                    def,
+                                    errors,
+                                ),
+                            )
+                        })
+                        .collect(),
+                },
+                |data, fields| (data.0, data.1, fields),
+            )
+        })
     }
 }
 

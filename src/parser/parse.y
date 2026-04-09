@@ -67,6 +67,7 @@ use crate::ShipFeature;
     tASSIGN     ":="
     tCOMMA      ","
     tDOT        "."
+    tGENERATED  "..."
 
 %type <Value> program
     maybe_class_defs class_defs class_def class_id maybe_class_members class_members class_member
@@ -78,6 +79,7 @@ use crate::ShipFeature;
     assignable_expr nonassignable_expr callable_expr noncallable_expr non_expr_stmt assign_stmt while_stmt if_stmt if_condition return_stmt
     args maybe_args_array args_array primary primitive
     int float string char super this general_id
+    generated
 
 %%
     program:
@@ -165,11 +167,13 @@ use crate::ShipFeature;
     constructor_def:
         kTHIS params kIS body kEND {
             let body = ShipBody::new(BodyData{ members: $<BodyBuilder>4 }, Loc::merge(*@3, *@5), self.src());
-            $$ = Value::new_cons_def(self.src(), Loc::merge(*@1, *@5), $<ShipParams>2, body);
+            $$ = Value::new_cons_def(self.src(), Loc::merge(*@1, *@5), $<ShipParams>2, ShipConsBodyAll::Body(body));
         } | kTHIS params tCOLON type_id kIS body kEND {
             self.register_error(Loc::merge(*@3, *@4), ParseError::ReturnTypeInCons);
             let body = ShipBody::new(BodyData{ members: $<BodyBuilder>6 }, Loc::merge(*@5, *@7), self.src());
-            $$ = Value::new_cons_def(self.src(), Loc::merge(*@1, *@7), $<ShipParams>2, body);
+            $$ = Value::new_cons_def(self.src(), Loc::merge(*@1, *@7), $<ShipParams>2, ShipConsBodyAll::Body(body));
+        } | kTHIS params generated {
+            $$ = Value::new_cons_def(self.src(), Loc::merge(*@1, *@3), $<ShipParams>2, ShipConsBodyAll::Generated($<ShipGenerated>3));
         }
 
     method_def:
@@ -237,6 +241,8 @@ use crate::ShipFeature;
             $$ = Value::new_method_body(self.src(), ShipMethodBodyAll::Body(body));
         } | tARROW expr {
             $$ = Value::new_method_body(self.src(), ShipMethodBodyAll::Expr($<ShipExprAll>2));
+        } | generated {
+            $$ = Value::new_method_body(self.src(), ShipMethodBodyAll::Generated($<ShipGenerated>1));
         }
 
     body:
@@ -492,6 +498,11 @@ use crate::ShipFeature;
     general_id:
         tIDENTIFIER {
             $$ = Value::new_id(self.src(), $<Token>1);
+        }
+
+    generated:
+        tGENERATED {
+            $$ = Value::new_generated(self.src(), $<Token>1);
         }
 %%
 

@@ -79,6 +79,10 @@ pub struct Registry<Id: RegistryId, V> {
 }
 impl<Id: RegistryId, V> Registry<Id, V> {
     #[inline]
+    pub const fn empty() -> Self {
+        Self { inner: vec![], phantom: PhantomData }
+    }
+    #[inline]
     fn new_with(len: usize) -> Self {
         let mut inner = Vec::with_capacity(len);
         inner.resize_with(len, || Option::None);
@@ -294,6 +298,11 @@ pub struct NameRegistry<'key, Id: RegistryId, V: 'key> {
 }
 
 impl<'key, Id: RegistryId, V: 'key> NameRegistry<'key, Id, V> {
+    #[inline]
+    pub fn empty() -> Self {
+        Self { name_to_id: HashMap::new(), id_to_value: Registry::empty() }
+    }
+
     #[inline]
     fn insert(&mut self, name: &'key str, id: Id, value: V) {
         self.name_to_id.insert(name, id);

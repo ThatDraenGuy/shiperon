@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{marker::PhantomData, rc::Rc};
 
 use crate::{
     ByteSource,
@@ -50,6 +50,7 @@ pub enum ParserValue<'src> {
     ClassDef(Rc<ShipClassDef<'src>>),
     ClassDefsBuilder(Vec<Rc<ShipClassDef<'src>>>),
     Program(Rc<ShipProgram<'src>>),
+    Generated(Rc<ShipGenerated<'src>>),
 }
 
 impl Token {
@@ -340,6 +341,15 @@ impl<'src> ShipProgram<'src> {
     }
 }
 
+impl<'src> ShipGenerated<'src> {
+    pub fn from(value: ParserValue<'src>) -> Rc<Self> {
+        match value {
+            ParserValue::Generated(n) => n,
+            other => unreachable!("expected Generated, got {:?}", other),
+        }
+    }
+}
+
 #[allow(non_snake_case)]
 pub mod ArgsBuilder {
     use super::ParserValue;
@@ -423,6 +433,10 @@ impl<'src> ParserValue<'src> {
 
     pub fn is_uninitialized(&self) -> bool {
         matches!(self, Self::Uninitialized)
+    }
+
+    pub fn new_generated(src: &impl ByteSource<'src>, token: Token) -> Self {
+        Self::Generated(ShipGenerated::new(GeneratedData { phantom: PhantomData }, token.loc, src))
     }
 
     pub fn new_id(src: &impl ByteSource<'src>, token: Token) -> Self {
@@ -653,7 +667,7 @@ impl<'src> ParserValue<'src> {
         src: &impl ByteSource<'src>,
         loc: ParserLoc,
         params: Rc<ShipParams<'src>>,
-        body: Rc<ShipBody<'src>>,
+        body: ShipConsBodyAll<'src>,
     ) -> Self {
         Self::ConsDef(ShipConsDef::new(ConsDefData { params, body }, loc, src))
     }

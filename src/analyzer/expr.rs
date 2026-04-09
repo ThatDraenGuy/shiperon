@@ -1,7 +1,5 @@
 use std::rc::Rc;
 
-use clap::error;
-
 use crate::{
     analyzer::{
         AnalysisError,
@@ -9,6 +7,7 @@ use crate::{
         field::{ClassWithFieldRegistry, FieldModel},
         registry::{ClassId, ConsId, FieldId, LibClassId, MethodId, VarId},
         signature::WithClassSignature,
+        stdlib::WithStd,
     },
     ast::{
         ShipArgs, ShipAssignableExprAll, ShipCallExpr, ShipCallableExprAll, ShipExprAll, ShipId,
@@ -50,7 +49,7 @@ pub struct ExprModel {
 
 impl ExprModel {
     pub fn resolve_callable<'src>(
-        registry: &ClassWithFieldRegistry<'src>,
+        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
         call: &Rc<ShipCallExpr<'src>>,
         ctx: &ScopeStack<'src>,
         errors: &mut Vec<AnalysisError<'src>>,
@@ -83,30 +82,27 @@ impl ExprModel {
                         (Some(ClassId::Invalid), CallExpr::Invalid)
                     })
             };
-        fn resolve_cons_call<'src>(
-            registry: &ClassWithFieldRegistry<'src>,
-            ctx: &ScopeStack<'src>,
-            cls_id: ClassId,
-            cons_args: &Rc<ShipArgs<'src>>,
-            errors: &mut Vec<AnalysisError<'src>>,
-        ) -> (ClassId, CallExpr) {
-            let args = ExprModel::resolve_args(registry, ctx, cons_args, errors);
-            let arg_types: Vec<_> = args.iter().map(|arg| arg.expr_type).collect();
+        let resolve_cons_call =
+            |cls_id: ClassId,
+             cons_args: &Rc<ShipArgs<'src>>,
+             errors: &mut Vec<AnalysisError<'src>>| {
+                let args = ExprModel::resolve_args(registry, ctx, cons_args, errors);
+                let arg_types: Vec<_> = args.iter().map(|arg| arg.expr_type).collect();
 
-            registry
-                .registry()
-                .get_cls_signature(&cls_id)
-                .class_signature()
-                .constructors
-                .find_matching_cons(&arg_types, registry.registry(), cons_args)
-                .map(|(cons_id, _cons_data)| {
-                    (cls_id, CallExpr::Cons { class: ctx.curr_cls.into(), cons: cons_id, args })
-                })
-                .unwrap_or_else(|e| {
-                    errors.push(e.into());
-                    (cls_id, CallExpr::Invalid)
-                })
-        }
+                registry
+                    .registry()
+                    .get_cls_signature(&cls_id)
+                    .class_signature()
+                    .constructors
+                    .find_matching_cons(&arg_types, &registry.registry(), cons_args)
+                    .map(|(cons_id, _cons_data)| {
+                        (cls_id, CallExpr::Cons { class: ctx.curr_cls.into(), cons: cons_id, args })
+                    })
+                    .unwrap_or_else(|e| {
+                        errors.push(e.into());
+                        (cls_id, CallExpr::Invalid)
+                    })
+            };
 
         match &call.expr {
             ShipCallableExprAll::MemberAccess(member_access) => {
@@ -114,14 +110,12 @@ impl ExprModel {
                 resolve_method_call(expr.expr_type, &member_access.member_id, &call.args, errors)
             },
             ShipCallableExprAll::This(_) => {
-                let (cls_id, expr) =
-                    resolve_cons_call(registry, ctx, ctx.curr_cls.into(), &call.args, errors);
+                let (cls_id, expr) = resolve_cons_call(ctx.curr_cls.into(), &call.args, errors);
                 (Some(cls_id), expr)
             },
             ShipCallableExprAll::Cons(id_node) => {
-                if let Some(cls_id) = registry.get_by_name(id_node.id) {
-                    let (cls_id, expr) =
-                        resolve_cons_call(registry, ctx, cls_id.into(), &call.args, errors);
+                if let Ok(cls_id) = registry.get_class(id_node) {
+                    let (cls_id, expr) = resolve_cons_call(cls_id, &call.args, errors);
                     (Some(cls_id), expr)
                 } else {
                     resolve_method_call(ctx.curr_cls.into(), id_node, &call.args, errors)
@@ -131,7 +125,7 @@ impl ExprModel {
         }
     }
     pub fn resolve_assignable<'src>(
-        registry: &ClassWithFieldRegistry<'src>,
+        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
         target: &ShipAssignableExprAll<'src>,
         ctx: &ScopeStack<'src>,
         value_type: ClassId,
@@ -173,7 +167,7 @@ impl ExprModel {
                 }
             },
             ShipAssignableExprAll::Variable(var_name) => match ctx
-                .find_var(registry.registry(), var_name)
+                .find_var(&registry.registry(), var_name)
             {
                 Some(ScopeVar::Var(var_id, var_signature)) => {
                     if !registry.registry().is_cls_subcls_of(value_type, var_signature.var_type).0 {
@@ -205,7 +199,7 @@ impl ExprModel {
     }
 
     pub fn resolve<'src>(
-        registry: &ClassWithFieldRegistry<'src>,
+        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
         ctx: &ScopeStack<'src>,
         expr: &ShipExprAll<'src>,
         errors: &mut Vec<AnalysisError<'src>>,
@@ -258,7 +252,7 @@ impl ExprModel {
                 ShipPrimaryAll::This(_node) => {
                     Self { expr_type: ctx.curr_cls.into(), expr: Expr::This }
                 },
-                ShipPrimaryAll::Id(id_node) => match ctx.find_var(registry.registry(), id_node) {
+                ShipPrimaryAll::Id(id_node) => match ctx.find_var(&registry.registry(), id_node) {
                     Some(ScopeVar::Var(var_id, var_signature)) => {
                         Self { expr_type: var_signature.var_type, expr: Expr::Varaible(var_id) }
                     },
@@ -282,7 +276,7 @@ impl ExprModel {
     }
 
     pub fn resolve_args<'src>(
-        registry: &ClassWithFieldRegistry<'src>,
+        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
         ctx: &ScopeStack<'src>,
         args: &Rc<ShipArgs<'src>>,
         errors: &mut Vec<AnalysisError<'src>>,

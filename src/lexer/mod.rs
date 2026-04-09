@@ -180,7 +180,14 @@ impl<'src, S: ByteSource<'src>> Lexer<'src, S> {
 
     fn read_symbolic(&mut self) -> LexResult<Token> {
         Ok(match self.next()? {
-            b'.' => self.empty_token(TokenRegistry::tDOT),
+            b'.' => {
+                if let Some(b'.') = self.peek_maybe()? {
+                    self.next_maybe()?;
+                    self.empty_token(TokenRegistry::tGENERATED)
+                } else {
+                    self.empty_token(TokenRegistry::tDOT)
+                }
+            },
             b',' => self.empty_token(TokenRegistry::tCOMMA),
             b'(' => self.empty_token(TokenRegistry::tLPAREN),
             b')' => self.empty_token(TokenRegistry::tRPAREN),
