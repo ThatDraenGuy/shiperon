@@ -12,6 +12,7 @@ use crate::{
     analyzer::{
         body::BodyError,
         field::{ClassWithFieldRegistry, FieldError},
+        model::ClassModelRegistry,
         signature::{ConsError, MethodError},
     },
     ast::{ShipId, ShipProgram},
@@ -23,17 +24,21 @@ use signature::{ClassDefRegistry, ClassError, ClassSignatureRegistry};
 
 pub struct Analyzer<'src> {
     ast: Rc<ShipProgram<'src>>,
-    diagnostics: Vec<Diagnostic<'src>>,
 }
 
 impl<'src> Analyzer<'src> {
-    pub fn analyze(&mut self) {
+    pub fn new(ast: Rc<ShipProgram<'src>>) -> Self {
+        Self { ast }
+    }
+    pub fn analyze(&mut self) -> (ClassModelRegistry, Vec<Diagnostic<'src>>) {
         let mut errors = Vec::new();
 
         let class_defs = ClassDefRegistry::new(&self.ast.classes, &mut errors);
         let class_signatures = ClassSignatureRegistry::new(class_defs, &mut errors);
         let checked_signatures = class_signatures.check_inheritance(&mut errors);
         let with_fields = ClassWithFieldRegistry::new(checked_signatures, &mut errors);
+        let result = ClassModelRegistry::new(with_fields, &mut errors);
+        (result, errors.into_iter().map(|e| e.into()).collect())
     }
 }
 
@@ -51,6 +56,12 @@ pub enum AnalysisError<'src> {
     Body(BodyError<'src>),
     #[display("{_0}")]
     Method(MethodError<'src>),
+}
+
+impl<'src> From<AnalysisError<'src>> for Diagnostic<'src> {
+    fn from(value: AnalysisError<'src>) -> Self {
+        todo!()
+    }
 }
 
 impl<'src> Renderable<'src> for AnalysisError<'src> {
@@ -74,6 +85,12 @@ pub enum GeneralError<'src> {
 
 impl<'src> Renderable<'src> for GeneralError<'src> {
     fn render(&self, src: &impl crate::ByteSource<'src>) -> String {
+        todo!()
+    }
+}
+
+impl<'src> From<GeneralError<'src>> for Diagnostic<'src> {
+    fn from(value: GeneralError<'src>) -> Self {
         todo!()
     }
 }

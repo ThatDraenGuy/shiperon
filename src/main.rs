@@ -2,7 +2,9 @@ use std::{error::Error, fs::read_to_string};
 
 use clap::{Parser, ValueEnum};
 use ron::ser::PrettyConfig;
-use shiperon::{CompilerConfig, Lexer, config::FeatureFlags, diagnostics::Renderable};
+use shiperon::{
+    CompilerConfig, Lexer, analyzer::Analyzer, config::FeatureFlags, diagnostics::Renderable,
+};
 
 /// The one and only Shiperon Compiler
 #[derive(Parser, Debug)]
@@ -51,12 +53,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{config:?}");
 
     let input = read_to_string(&args.src)?;
-    let parser = shiperon::Parser::new(Lexer::of_str(&input), config);
-    let parse_data = parser.consume_parse();
-    let str_result = ron::ser::to_string_pretty(&parse_data.program, PrettyConfig::default())?;
-    println!("{str_result}");
-    for item in &parse_data.diagnostics {
-        println!("{}\n", item.render(&parse_data.src));
+    let (_registry, diagnostics, src) = shiperon::process(&input, config);
+    for item in &diagnostics {
+        println!("{}\n", item.render(&src));
     }
     Ok(())
 }

@@ -60,12 +60,19 @@ pub struct ScopeStack<'src> {
 }
 
 impl<'src> ScopeStack<'src> {
-    fn new_cons(cls: UserClassId) -> Self {
-        let inner = LinkedList::new(); //TODO parent fields!!!
+    fn new_cons(cls: UserClassId, id: ConsId, params: VarSignatureRegistry<'src>) -> Self {
+        let mut inner = LinkedList::new();
+        inner.push_front(BodyScope { scope_type: ScopeType::Cons(id), vars: params });
         Self { inner, curr_cls: cls, expected_return: None }
     }
-    fn new_method(cls: UserClassId, return_type: Option<ClassId>) -> Self {
-        let inner = LinkedList::new(); //TODO parent fields!!!
+    fn new_method(
+        cls: UserClassId,
+        id: MethodId,
+        params: VarSignatureRegistry<'src>,
+        return_type: Option<ClassId>,
+    ) -> Self {
+        let mut inner = LinkedList::new();
+        inner.push_front(BodyScope { scope_type: ScopeType::Method(id), vars: params });
         Self { inner, curr_cls: cls, expected_return: Some(return_type) }
     }
 
@@ -304,7 +311,18 @@ impl ConsBody {
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> Self {
         let signature = &registry.get(&cls_id).class_signature().constructors.get(&cons_id).1;
-        let mut scopes = ScopeStack::new_cons(cls_id);
+
+        let params = signature.annotate_types(def.params.params.iter());
+        let mut param_registry = VarSignatureRegistry::default();
+        for (param_def, param_type) in params {
+            if let Some((old, new)) = param_registry
+                .insert(param_def.name.id, VarSignature { var_type: param_type, mutable: true })
+            {
+                errors.push(BodyError::DuplicateParam { snd: param_def.clone() }.into());
+            }
+        }
+
+        let mut scopes = ScopeStack::new_cons(cls_id, cons_id, param_registry);
         let body = Body::resolve(registry, &mut scopes, &def.body, errors);
         Self { body }
     }
@@ -332,7 +350,18 @@ impl MethodBody {
             .get_method(&method_id)
             .method_signature();
 
-        let mut scopes = ScopeStack::new_method(cls_id, signature.return_type);
+        let params = signature.params.annotate_types(def.params.params.iter());
+        let mut param_registry = VarSignatureRegistry::default();
+        for (param_def, param_type) in params {
+            if let Some((old, new)) = param_registry
+                .insert(param_def.name.id, VarSignature { var_type: param_type, mutable: true })
+            {
+                errors.push(BodyError::DuplicateParam { snd: param_def.clone() }.into());
+            }
+        }
+
+        let mut scopes =
+            ScopeStack::new_method(cls_id, method_id, param_registry, signature.return_type);
         let body = match &def.body {
             Some(ShipMethodBodyAll::Expr(expr)) => {
                 let expr_model = ExprModel::resolve(registry, &scopes, expr, errors);
@@ -371,6 +400,8 @@ pub enum BodyError<'src> {
     UnreachableStmts { stmts: Vec<ShipBodyMemberAll<'src>> },
     #[display("void returning method call in non void context")]
     InvalidVoidReturningCall { call: Rc<ShipCallExpr<'src>> },
+    #[display("duplicate param")]
+    DuplicateParam { snd: Rc<ShipParam<'src>> },
 }
 impl<'src> Renderable<'src> for BodyError<'src> {
     fn render(&self, src: &impl crate::ByteSource<'src>) -> String {

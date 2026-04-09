@@ -56,6 +56,10 @@ impl ParamsSignature {
                 .unwrap_or((true, 0)) //zero-arg constructor
         }
     }
+
+    pub fn annotate_types<V, I: Iterator<Item = V>>(&self, args: I) -> Vec<(V, ClassId)> {
+        args.zip(self.param_types.iter().copied()).collect()
+    }
 }
 
 pub trait WithParamsSignature {
