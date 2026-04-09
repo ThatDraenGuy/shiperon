@@ -188,7 +188,11 @@ impl<'a, 'src: 'a, C: WithClassSignature<'src>> WithStd<'src, &ClassRegistry<C>>
                 if parent == LibClassId::Class.into() || parent == ClassId::Invalid {
                     Err(MethodError::NoOverload { args: args_node.clone() })
                 } else {
-                    self.find_matching_method(parent, name, param_types, name_node, args_node)
+                    match self.find_matching_method(parent, name, param_types, name_node, args_node)
+                    {
+                        Ok(res) => Ok(res),
+                        Err(_) => Err(MethodError::NoOverload { args: args_node.clone() }),
+                    }
                 }
             })
     }
@@ -310,7 +314,6 @@ impl<'src, V> ClassNameRegistry<'src, V> {
     }
 
     pub fn get_class(&self, cls_name: &Rc<ShipId<'src>>) -> Result<ClassId, AnalysisError<'src>> {
-        //TODO: lib classes
         Ok(match cls_name.id {
             "Class" => LibClassId::Class.into(),
             "AnyRef" => LibClassId::AnyRef.into(),
@@ -327,15 +330,23 @@ impl<'src, V> ClassNameRegistry<'src, V> {
             },
         })
     }
+
+    pub fn get_fake_class(
+        &self,
+        cls_name: &Rc<ShipId<'src>>,
+    ) -> Result<ClassId, AnalysisError<'src>> {
+        self.get_user_class(cls_name).map(|id| id.into())
+    }
 }
 
 impl<'src> ClassSignatureRegistry<'src> {
     fn get_class_with_err<V>(
         defs: &ClassNameRegistry<'src, V>,
         cls_name: &Rc<ShipId<'src>>,
+        is_fake: bool,
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> ClassId {
-        match defs.get_class(cls_name) {
+        match if is_fake { defs.get_fake_class(cls_name) } else { defs.get_class(cls_name) } {
             Ok(cls) => cls,
             Err(e) => {
                 errors.push(e);
@@ -346,6 +357,7 @@ impl<'src> ClassSignatureRegistry<'src> {
     fn resolve_params(
         defs: &ClassDefRegistry<'src>,
         params_node: &Rc<ShipParams<'src>>,
+        is_fake: bool,
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> ParamsSignature {
         ParamsSignature::new(
@@ -354,7 +366,7 @@ impl<'src> ClassSignatureRegistry<'src> {
                 .iter()
                 .map(|param| {
                     let cls_name = &param.var_type;
-                    Self::get_class_with_err(defs, cls_name, errors)
+                    Self::get_class_with_err(defs, cls_name, is_fake, errors)
                 })
                 .collect(),
         )
@@ -363,23 +375,28 @@ impl<'src> ClassSignatureRegistry<'src> {
     fn resolve_method(
         defs: &ClassDefRegistry<'src>,
         method_node: &Rc<ShipMethodDef<'src>>,
+        is_fake: bool,
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> MethodSignature {
-        let params = Self::resolve_params(defs, &method_node.params, errors);
+        let params = Self::resolve_params(defs, &method_node.params, is_fake, errors);
         let return_type = method_node
             .return_type
             .as_ref()
-            .map(|cls_name| Self::get_class_with_err(defs, cls_name, errors));
+            .map(|cls_name| Self::get_class_with_err(defs, cls_name, is_fake, errors));
         MethodSignature { params, return_type }
     }
 
-    pub fn new(defs: ClassDefRegistry<'src>, errors: &mut Vec<AnalysisError<'src>>) -> Self {
+    pub fn new(
+        defs: ClassDefRegistry<'src>,
+        is_fake: bool,
+        errors: &mut Vec<AnalysisError<'src>>,
+    ) -> Self {
         defs.transform_with_self(
             |defs, id, def| {
                 let parent = def
                     .parent_id
                     .as_ref()
-                    .map(|cls_name| Self::get_class_with_err(defs, cls_name, errors))
+                    .map(|cls_name| Self::get_class_with_err(defs, cls_name, is_fake, errors))
                     .unwrap_or(ClassId::Lib(LibClassId::AnyRef));
 
                 let mut constructors = ConsSignatureRegistryBuilder::default();
@@ -397,7 +414,7 @@ impl<'src> ClassSignatureRegistry<'src> {
                             }
                         },
                         ShipClassMemberAll::MethodDef(node) => {
-                            let signature = Self::resolve_method(defs, node, errors);
+                            let signature = Self::resolve_method(defs, node, is_fake, errors);
                             methods.update(node.method_id.id, |maybe_old| match maybe_old {
                                 Some(mut old) => {
                                     //TODO check same params?
@@ -412,7 +429,7 @@ impl<'src> ClassSignatureRegistry<'src> {
                             });
                         },
                         ShipClassMemberAll::ConsDef(node) => {
-                            let params = Self::resolve_params(defs, &node.params, errors);
+                            let params = Self::resolve_params(defs, &node.params, is_fake, errors);
                             constructors.insert((node.clone(), params));
                         },
                     }

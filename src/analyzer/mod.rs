@@ -40,7 +40,7 @@ impl<'src> Analyzer<'src> {
         let mut errors = Vec::new();
 
         let class_defs = ClassDefRegistry::new(&self.ast.classes, &mut errors);
-        let class_signatures = ClassSignatureRegistry::new(class_defs, &mut errors);
+        let class_signatures = ClassSignatureRegistry::new(class_defs, false, &mut errors);
         let checked_signatures = class_signatures.check_inheritance(&mut errors);
         let with_fields =
             ClassWithFieldRegistry::new(WithStd::wrap(lib, checked_signatures), &mut errors);

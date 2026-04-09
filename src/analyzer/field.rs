@@ -89,7 +89,8 @@ impl FieldModel {
             ShipCallableExprAll::Cons(cls_name) => {
                 //TODO lib classes!!!
                 match registry.get_by_name(cls_name.id) {
-                    Some(cls_id) => {
+                    Some(user_cls_id) => {
+                        let cls_id = ClassId::User(user_cls_id);
                         let own_cls_id = signature.id;
                         if registry.registry().is_cls_subcls_of(cls_id, own_cls_id).0 {
                             return Self::invalid(
@@ -114,20 +115,20 @@ impl FieldModel {
                             })
                             .collect();
                         if has_errors {
-                            FieldModel { field_type: cls_id.into(), init_expr: FieldExpr::Invalid }
+                            FieldModel { field_type: cls_id, init_expr: FieldExpr::Invalid }
                         } else {
                             let arg_types: Vec<_> =
                                 args.iter().map(|model| model.field_type).collect();
 
                             registry
-                                .get(&cls_id)
-                                .class_signature()
+                                .registry()
+                                .get_cls_signature(&cls_id)
                                 .constructors
                                 .find_matching_cons(&arg_types, &registry.registry(), &call.args)
                                 .map(|(cons_id, _data)| FieldModel {
-                                    field_type: cls_id.into(),
+                                    field_type: cls_id,
                                     init_expr: FieldExpr::Cons {
-                                        class: cls_id.into(),
+                                        class: cls_id,
                                         cons: cons_id,
                                         args,
                                     },

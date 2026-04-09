@@ -421,7 +421,7 @@ impl<'src> Renderable<'src> for BodyError<'src> {
             BodyError::AssignToExternalField { assign: _ } => {
                 format!("Fields of foreign classes are read-only")
             },
-            BodyError::TypeMismatch { expr: _ } => format!("TODO"),
+            BodyError::TypeMismatch { expr: _ } => format!("Type mismatch"),
             BodyError::NonBoolCondition { condition: _ } => {
                 format!("Condition expression is nota boolean")
             },

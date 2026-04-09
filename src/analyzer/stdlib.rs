@@ -60,7 +60,7 @@ pub fn stdlib() -> StdLibRegistry {
         invalid_fields: ClassFields { registry: Registry::empty() },
     };
     let class_defs = ClassDefRegistry::new(&ast.classes, &mut errors);
-    let class_signatures = ClassSignatureRegistry::new(class_defs, &mut errors);
+    let class_signatures = ClassSignatureRegistry::new(class_defs, false, &mut errors);
     let checked_signatures = class_signatures.check_inheritance(&mut errors);
     let with_fields = ClassWithFieldRegistry::new(
         WithStd { lib: Rc::new(fake_lib), user: checked_signatures, phantom: PhantomData },
@@ -111,6 +111,9 @@ impl<'std, T> DerefMut for WithStd<'std, T> {
     }
 }
 impl<'std, T> WithStd<'std, T> {
+    pub fn is_fake(&self) -> bool {
+        self.lib.inner.is_empty()
+    }
     pub fn unwrap(self) -> T {
         self.user
     }
