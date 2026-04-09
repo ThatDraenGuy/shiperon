@@ -141,9 +141,9 @@ impl<T> WithMethodSignature for (T, MethodSignature) {
 }
 
 impl<'a, 'src: 'a, C: WithClassSignature<'src>> ClassRegistry<C> {
-    pub fn get_cls(&self, cls_id: &ClassId) -> &C {
+    pub fn get_cls_signature(&self, cls_id: &ClassId) -> &ClassSignature<'src> {
         match cls_id {
-            ClassId::User(user_class_id) => self.get(&user_class_id),
+            ClassId::User(user_class_id) => self.get(user_class_id).class_signature(),
             ClassId::Lib(lib_class_id) => todo!(),
             ClassId::Invalid => todo!(),
         }

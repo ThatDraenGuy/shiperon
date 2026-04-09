@@ -95,7 +95,7 @@ impl ExprModel {
 
             registry
                 .registry()
-                .get_cls(&cls_id)
+                .get_cls_signature(&cls_id)
                 .class_signature()
                 .constructors
                 .find_matching_cons(&arg_types, registry.registry(), cons_args)

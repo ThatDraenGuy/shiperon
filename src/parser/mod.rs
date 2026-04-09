@@ -44,7 +44,7 @@ pub enum ParseError<'src> {
 }
 
 impl<'src> Renderable<'src> for ParseError<'src> {
-    fn render(&self, src: &impl ByteSource<'src>) -> String {
+    fn render(&self, _src: &impl ByteSource<'src>) -> String {
         match self {
             Self::UnexpectedToken { token_name: _ } => "Unexpected token".to_owned(),
             Self::BodyMembersAfterReturn { return_stmt } => format!(

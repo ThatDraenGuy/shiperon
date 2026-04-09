@@ -188,14 +188,21 @@ impl WithClassFields for ClassFields {
     }
 }
 impl<'src, V: WithClassFields + WithClassSignature<'src>> ClassRegistry<V> {
+    pub fn get_cls_fields(&self, cls_id: &ClassId) -> &ClassFields {
+        match cls_id {
+            ClassId::User(user_class_id) => self.get(user_class_id).class_fields(),
+            ClassId::Lib(lib_class_id) => todo!(),
+            ClassId::Invalid => todo!(),
+        }
+    }
+
     pub fn find_field(
         &self,
         cls_id: ClassId,
         field_name: &Rc<ShipId<'src>>,
     ) -> Result<(FieldId, &FieldModel), FieldError<'src>> {
-        let cls = self.get_cls(&cls_id);
-        let signature = cls.class_signature();
-        let fields = cls.class_fields();
+        let signature = self.get_cls_signature(&cls_id);
+        let fields = self.get_cls_fields(&cls_id);
         if let Some(field_id) = signature.fields.get_by_name(field_name.id) {
             Ok((field_id, fields.registry.get(&field_id)))
         } else if cls_id == LibClassId::Class.into() {

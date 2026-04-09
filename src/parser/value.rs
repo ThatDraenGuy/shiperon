@@ -3,7 +3,6 @@ use std::rc::Rc;
 use crate::{
     ByteSource,
     ast::*,
-    diagnostics::Diagnostic,
     lexer::{Token, TokenValue},
     parser::ParserLoc,
 };
