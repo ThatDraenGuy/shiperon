@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use derive_more::Display;
 
+use crate::analyzer::stages::Stage1;
 use crate::analyzer::{AnalysisError, GeneralError};
 use crate::ast::{
     ShipArgs, ShipClassDef, ShipClassMemberAll, ShipConsDef, ShipId, ShipMethodDef, ShipParams,
@@ -35,11 +36,7 @@ impl ParamsSignature {
         Self { param_types }
     }
 
-    pub fn matches<'src, V>(
-        &self,
-        arg_types: &[ClassId],
-        registry: &ClassNameRegistry<'src, V>,
-    ) -> (bool, u8)
+    pub fn matches<'src, V>(&self, arg_types: &[ClassId], registry: &ClassRegistry<V>) -> (bool, u8)
     where
         V: WithClassSignature<'src>,
     {
@@ -79,7 +76,7 @@ impl<V: WithParamsSignature> ConsRegistry<V> {
     pub fn find_matching_cons<'src, C: WithClassSignature<'src>>(
         &self,
         param_types: &[ClassId],
-        registry: &ClassNameRegistry<'src, C>,
+        registry: &ClassRegistry<C>,
         node: &Rc<ShipArgs<'src>>,
     ) -> Result<(ConsId, &V), ConsError<'src>> {
         self.iter()
@@ -95,6 +92,7 @@ impl<V: WithParamsSignature> ConsRegistry<V> {
 
 #[derive(Debug, Clone, Display)]
 pub enum ConsError<'src> {
+    #[display("no matching cons found")]
     NoMatchingCons { args: Rc<ShipArgs<'src>> },
 }
 impl<'src> Renderable<'src> for ConsError<'src> {
@@ -106,6 +104,89 @@ impl<'src> Renderable<'src> for ConsError<'src> {
 pub struct MethodSignature {
     pub params: ParamsSignature,
     pub return_type: Option<ClassId>,
+}
+
+pub trait WithMethodSignature {
+    fn method_signature(&self) -> &MethodSignature;
+}
+impl WithMethodSignature for MethodSignature {
+    #[inline]
+    fn method_signature(&self) -> &MethodSignature {
+        self
+    }
+}
+impl<T> WithMethodSignature for (T, MethodSignature) {
+    #[inline]
+    fn method_signature(&self) -> &MethodSignature {
+        &self.1
+    }
+}
+
+impl<'src, C: WithClassSignature<'src>> ClassRegistry<C> {
+    pub fn get_cls(&self, cls_id: &ClassId) -> &C {
+        match cls_id {
+            ClassId::User(user_class_id) => self.get(&user_class_id),
+            ClassId::Lib(lib_class_id) => todo!(),
+            ClassId::Invalid => todo!(),
+        }
+    }
+    pub fn find_matching_method(
+        &self,
+        cls_id: ClassId,
+        name: &'src str,
+        param_types: &[ClassId],
+        name_node: &Rc<ShipId<'src>>,
+        args_node: &Rc<ShipArgs<'src>>,
+    ) -> Result<(ClassId, MethodId), MethodError<'src>> {
+        match cls_id {
+            ClassId::User(user_class_id) => {
+                let signature = self.get(&user_class_id).class_signature();
+                let methods = &signature.methods;
+                let name_id = methods
+                    .get_by_name(name)
+                    .ok_or(MethodError::UndefinedMethod { name: name_node.clone() })?;
+                methods
+                    .get(&name_id)
+                    .iter()
+                    .filter_map(|(overload_id, data)| {
+                        let (is_match, degree) =
+                            data.method_signature().params.matches(param_types, self);
+                        if is_match { Some((overload_id, degree)) } else { None }
+                    })
+                    .min_by(|fst, snd| fst.1.cmp(&snd.1))
+                    .map(|(overload_id, _degree)| Ok((cls_id, (name_id, overload_id).into())))
+                    .unwrap_or_else(|| {
+                        let parent = signature.parent;
+                        if parent == LibClassId::Class.into() {
+                            Err(MethodError::NoOverload { args: args_node.clone() })
+                        } else {
+                            self.find_matching_method(
+                                parent,
+                                name,
+                                param_types,
+                                name_node,
+                                args_node,
+                            )
+                        }
+                    })
+            },
+            ClassId::Lib(lib_class_id) => todo!(),
+            ClassId::Invalid => todo!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Display)]
+pub enum MethodError<'src> {
+    #[display("no method name found")]
+    UndefinedMethod { name: Rc<ShipId<'src>> },
+    #[display("no overload matching call")]
+    NoOverload { args: Rc<ShipArgs<'src>> },
+}
+impl<'src> Renderable<'src> for MethodError<'src> {
+    fn render(&self, src: &impl crate::ByteSource<'src>) -> String {
+        todo!()
+    }
 }
 
 pub type MethodSignatureRegistry<'src> =
@@ -121,11 +202,21 @@ pub type FieldNamesRegistry<'src> = FieldNameRegistry<'src, Rc<ShipVarDef<'src>>
 pub type FieldNamesRegistryBuilder<'src> = FieldNameRegistryBuilder<'src, Rc<ShipVarDef<'src>>>;
 
 pub struct ClassSignature<'src> {
-    pub id: UserClassId,
+    pub id: ClassId,
     pub parent: ClassId,
     pub constructors: ConsSignatureRegistry<'src>,
     pub methods: MethodSignatureRegistry<'src>,
     pub fields: FieldNamesRegistry<'src>,
+}
+
+pub trait WithClassDef<'src> {
+    fn class_def(&self) -> &Rc<ShipClassDef<'src>>;
+}
+impl<'src> WithClassDef<'src> for Rc<ShipClassDef<'src>> {
+    #[inline]
+    fn class_def(&self) -> &Rc<ShipClassDef<'src>> {
+        self
+    }
 }
 
 pub trait WithClassSignature<'src> {
@@ -137,14 +228,8 @@ impl<'src> WithClassSignature<'src> for ClassSignature<'src> {
         self
     }
 }
-impl<'src, T> WithClassSignature<'src> for (T, ClassSignature<'src>) {
-    #[inline]
-    fn class_signature(&self) -> &ClassSignature<'src> {
-        &self.1
-    }
-}
 
-impl<'src, V: WithClassSignature<'src>> ClassNameRegistry<'src, V> {
+impl<'src, V: WithClassSignature<'src>> ClassRegistry<V> {
     pub fn is_cls_subcls_of<C: Into<ClassId>, P: Into<ClassId>>(
         &self,
         child: C,
@@ -173,8 +258,7 @@ impl<'src, V: WithClassSignature<'src>> ClassNameRegistry<'src, V> {
     }
 }
 
-pub type ClassSignatureRegistry<'src> =
-    NameRegistry<'src, UserClassId, (Rc<ShipClassDef<'src>>, ClassSignature<'src>)>;
+pub type ClassSignatureRegistry<'src> = NameRegistry<'src, UserClassId, Stage1<'src>>;
 
 impl<'src> ClassSignatureRegistry<'src> {
     fn get_user_class(
@@ -278,7 +362,7 @@ impl<'src> ClassSignatureRegistry<'src> {
                 }
 
                 ClassSignature {
-                    id,
+                    id: id.into(),
                     parent,
                     constructors: constructors.build(),
                     methods: methods.build().transform(|_id, builder| builder.build()),
@@ -298,13 +382,15 @@ impl<'src> ClassSignatureRegistry<'src> {
         match visited.get(&id) {
             Some(VisitStatus::Valid) => Ok(true),
             Some(VisitStatus::Invalid) => Ok(false),
-            Some(VisitStatus::Fresh) => Err(CircularInheritance { chain: vec![data.0.clone()] }),
+            Some(VisitStatus::Fresh) => {
+                Err(CircularInheritance { chain: vec![data.class_def().clone()] })
+            },
             None => {
                 visited.insert(id, VisitStatus::Fresh);
-                let res = match &data.1.parent {
+                let res = match &data.class_signature().parent {
                     ClassId::User(parent_id) => {
                         self.check_parent(*parent_id, visited).map_err(|mut e| {
-                            e.chain.push(data.0.clone());
+                            e.chain.push(data.class_def().clone());
                             CircularInheritance { chain: e.chain }
                         })
                     },
@@ -330,13 +416,13 @@ impl<'src> ClassSignatureRegistry<'src> {
                     false
                 },
             },
-            |data, is_valid| {
+            |(def, signature), is_valid| {
                 (
-                    data.0,
+                    def,
                     if is_valid {
-                        data.1
+                        signature
                     } else {
-                        ClassSignature { parent: ClassId::Invalid, ..data.1 }
+                        ClassSignature { parent: ClassId::Invalid, ..signature }
                     },
                 )
             },

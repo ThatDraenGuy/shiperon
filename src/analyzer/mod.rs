@@ -1,15 +1,18 @@
 pub mod body;
 pub mod expr;
 pub mod field;
+pub mod model;
 pub mod registry;
 pub mod signature;
+pub mod stages;
 
 use std::rc::Rc;
 
 use crate::{
     analyzer::{
+        body::BodyError,
         field::{ClassWithFieldRegistry, FieldError},
-        signature::ConsError,
+        signature::{ConsError, MethodError},
     },
     ast::{ShipId, ShipProgram},
     diagnostics::{Diagnostic, Renderable},
@@ -44,6 +47,10 @@ pub enum AnalysisError<'src> {
     Field(FieldError<'src>),
     #[display("{_0}")]
     Cons(ConsError<'src>),
+    #[display("{_0}")]
+    Body(BodyError<'src>),
+    #[display("{_0}")]
+    Method(MethodError<'src>),
 }
 
 impl<'src> Renderable<'src> for AnalysisError<'src> {
@@ -53,6 +60,8 @@ impl<'src> Renderable<'src> for AnalysisError<'src> {
             AnalysisError::Field(field_error) => field_error.render(src),
             AnalysisError::General(general_error) => general_error.render(src),
             AnalysisError::Cons(cons_error) => cons_error.render(src),
+            AnalysisError::Body(body_error) => body_error.render(src),
+            AnalysisError::Method(method_error) => method_error.render(src),
         }
     }
 }

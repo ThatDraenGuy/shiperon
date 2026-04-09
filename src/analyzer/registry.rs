@@ -55,6 +55,11 @@ impl<Id: RegistryId, V> RegistryBuilder<Id, V> {
     }
 
     #[inline]
+    pub fn curr(&self) -> &Registry<Id, V> {
+        &self.registry
+    }
+
+    #[inline]
     pub fn build(self) -> Registry<Id, V> {
         self.registry
     }
@@ -128,9 +133,17 @@ impl<Id: RegistryId, V> Registry<Id, V> {
     #[inline]
     pub fn combine<V2, V3, F>(self, other: Registry<Id, V2>, f: F) -> Registry<Id, V3>
     where
-        F: Fn(Option<V>, Option<V2>) -> Option<V3>,
+        F: Fn(V, V2) -> V3,
     {
-        let t = self.inner.into_iter().zip(other.inner).map(|(v, v2)| f(v, v2)).collect();
+        let t = self
+            .inner
+            .into_iter()
+            .zip(other.inner)
+            .map(|(v, v2)| match (v, v2) {
+                (Some(a), Some(b)) => Some(f(a, b)),
+                _ => None,
+            })
+            .collect();
         Registry { inner: t, phantom: PhantomData }
     }
 }
@@ -239,17 +252,26 @@ impl<'key, Id: RegistryId, V> NameRegistryBuilder<'key, Id, V> {
         }
     }
     #[inline]
-    pub fn update<F>(&mut self, name: &'key str, update: F)
+    pub fn update<F>(&mut self, name: &'key str, update: F) -> Id
     where
         F: FnOnce(Option<V>) -> V,
     {
         match self.registry.get_by_name(name) {
-            Some(id) => self.registry.replace(&id, update),
+            Some(id) => {
+                self.registry.replace(&id, update);
+                id
+            },
             None => {
                 let value = update(None);
-                self.insert(name, value);
+                let id = self.id_provider.get();
+                self.registry.insert(name, id, value);
+                id
             },
         }
+    }
+
+    pub fn curr(&self) -> &NameRegistry<'key, Id, V> {
+        &self.registry
     }
 
     #[inline]
@@ -300,12 +322,20 @@ impl<'key, Id: RegistryId, V: 'key> NameRegistry<'key, Id, V> {
     }
 
     #[inline]
+    pub fn get_name(&self, id: &Id) -> &'key str {
+        self.name_to_id.iter().find(|(_name, name_id)| id == *name_id).unwrap().0
+    }
+    #[inline]
     pub fn iter(&self) -> Iter<'_, Id, V> {
         self.id_to_value.iter()
     }
 
     pub fn registry(&self) -> &Registry<Id, V> {
         &self.id_to_value
+    }
+
+    pub fn take_registry(self) -> Registry<Id, V> {
+        self.id_to_value
     }
 
     pub fn transform<V2, Fp>(self, f: Fp) -> NameRegistry<'key, Id, V2>
@@ -331,10 +361,7 @@ impl<'key, Id: RegistryId, V: 'key> NameRegistry<'key, Id, V> {
 
         NameRegistry {
             name_to_id: self.name_to_id,
-            id_to_value: self.id_to_value.combine(new_registry, |v, v2| match (v, v2) {
-                (Some(a), Some(b)) => Some(combine(a, b)),
-                _ => None,
-            }),
+            id_to_value: self.id_to_value.combine(new_registry, combine),
         }
     }
 }
@@ -452,6 +479,11 @@ mod method {
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct MethodId(MethodNameId, MethodOverloadId);
+    impl From<(MethodNameId, MethodOverloadId)> for MethodId {
+        fn from(value: (MethodNameId, MethodOverloadId)) -> Self {
+            Self(value.0, value.1)
+        }
+    }
 
     pub type MethodNameRegistry<'key, V> =
         NameRegistry<'key, MethodNameId, Registry<MethodOverloadId, V>>;
@@ -461,6 +493,11 @@ mod method {
     pub type MethodRegistry<V> = Registry<MethodNameId, Registry<MethodOverloadId, V>>;
     pub type MethodRegistryBuilder<V> =
         RegistryBuilder<MethodNameId, RegistryBuilder<MethodOverloadId, V>>;
+    impl<V> MethodRegistry<V> {
+        pub fn get_method(&self, id: &MethodId) -> &V {
+            self.get(&id.0).get(&id.1)
+        }
+    }
 }
 pub use method::*;
 
@@ -516,3 +553,32 @@ mod field {
     pub type FieldRegistryBuilder<V> = RegistryBuilder<FieldId, V>;
 }
 pub use field::*;
+
+mod variable {
+    use super::{
+        HasProvider, InnerRegistryId, NameRegistry, NameRegistryBuilder, Registry, RegistryBuilder,
+        SimpleIdProvider,
+    };
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct VarId(u32);
+    impl InnerRegistryId for VarId {
+        #[inline]
+        fn as_index(&self) -> usize {
+            self.0 as usize
+        }
+
+        #[inline]
+        fn from_index(idx: usize) -> Self {
+            Self(idx as u32)
+        }
+    }
+    impl HasProvider for VarId {
+        type Provider = SimpleIdProvider<VarId>;
+    }
+    pub type VarNameRegistry<'key, V> = NameRegistry<'key, VarId, V>;
+    pub type VarNameRegistryBuilder<'key, V> = NameRegistryBuilder<'key, VarId, V>;
+    pub type VarRegistry<V> = Registry<VarId, V>;
+    pub type VarRegistryBuilder<V> = RegistryBuilder<VarId, V>;
+}
+pub use variable::*;

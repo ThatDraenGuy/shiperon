@@ -11,6 +11,7 @@ use crate::{
             LibClassId,
         },
         signature::{ClassSignature, ClassSignatureRegistry, WithClassSignature},
+        stages::Stage2,
     },
     ast::{
         ShipCallExpr, ShipCallableExprAll, ShipClassDef, ShipExprAll, ShipPrimaryAll, ShipVarDef,
@@ -90,7 +91,7 @@ impl FieldModel {
                 match registry.get_by_name(cls_name.id) {
                     Some(cls_id) => {
                         let own_cls_id = signature.id;
-                        if registry.is_cls_subcls_of(cls_id, own_cls_id).0 {
+                        if registry.registry().is_cls_subcls_of(cls_id, own_cls_id).0 {
                             return Self::invalid(
                                 errors,
                                 ClassId::Invalid,
@@ -122,7 +123,7 @@ impl FieldModel {
                                 .get(&cls_id)
                                 .class_signature()
                                 .constructors
-                                .find_matching_cons(&arg_types, registry, &call.args)
+                                .find_matching_cons(&arg_types, registry.registry(), &call.args)
                                 .map(|(cons_id, _data)| FieldModel {
                                     field_type: cls_id.into(),
                                     init_expr: FieldExpr::Cons {
@@ -175,9 +176,17 @@ pub type FieldModelRegistryBuilder = FieldRegistryBuilder<FieldModel>;
 pub struct ClassFields {
     pub registry: FieldModelRegistry,
 }
+pub trait WithClassFields {
+    fn class_fields(&self) -> &ClassFields;
+}
+impl WithClassFields for ClassFields {
+    #[inline]
+    fn class_fields(&self) -> &ClassFields {
+        self
+    }
+}
 
-pub type ClassWithFieldRegistry<'src> =
-    ClassNameRegistry<'src, (Rc<ShipClassDef<'src>>, ClassSignature<'src>, ClassFields)>;
+pub type ClassWithFieldRegistry<'src> = ClassNameRegistry<'src, Stage2<'src>>;
 
 impl<'src> ClassWithFieldRegistry<'src> {
     pub fn new(
