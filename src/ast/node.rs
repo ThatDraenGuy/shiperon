@@ -64,6 +64,10 @@ impl<'src, N: NodeData> Node<'src, N> {
         let (start, end) = src.resolve(loc);
         Rc::new(Node { raw_loc: loc, start, end, src: src.source(loc), data })
     }
+
+    pub fn src(&self) -> &'src str {
+        str::from_utf8(self.src).unwrap_or("invalid utf-8 string")
+    }
 }
 
 impl<'src, N: NodeData> WithParserLoc for Node<'src, N> {

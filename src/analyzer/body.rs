@@ -18,6 +18,7 @@ use crate::{
     },
     ast::*,
     diagnostics::Renderable,
+    parser::{ParserLoc, WithParserLoc},
 };
 
 enum ScopeType {
@@ -404,7 +405,59 @@ pub enum BodyError<'src> {
     DuplicateParam { snd: Rc<ShipParam<'src>> },
 }
 impl<'src> Renderable<'src> for BodyError<'src> {
-    fn render(&self, src: &impl crate::ByteSource<'src>) -> String {
-        todo!()
+    fn render(&self, _src: &impl crate::ByteSource<'src>) -> String {
+        match self {
+            BodyError::ReturnInCons { return_stmt: _ } => {
+                format!("Return statement not allowed in a constructor")
+            },
+            BodyError::UndefinedVariable { name } => {
+                format!("Variable with name `{}` was not found", name.id)
+            },
+            BodyError::AssignToConst { assign: _ } => {
+                format!("Assign into a constant variable attempted")
+            },
+            BodyError::AssignToExternalField { assign: _ } => {
+                format!("Fields of foreign classes are read-only")
+            },
+            BodyError::TypeMismatch { expr: _ } => format!("TODO"),
+            BodyError::NonBoolCondition { condition: _ } => {
+                format!("Condition expression is nota boolean")
+            },
+            BodyError::ReturnValueInVoid { return_stmt: _ } => {
+                format!("Return statement with value is not allowed in a void method")
+            },
+            BodyError::VoidReturnInValued { return_stmt: _ } => {
+                format!("Return statement without value is not allowed in a non-void method")
+            },
+            BodyError::UnreachableStmts { stmts: _ } => format!("Dead code"),
+            BodyError::InvalidVoidReturningCall { call: _ } => {
+                format!("Attempted to use return value of a void method")
+            },
+            BodyError::DuplicateParam { snd } => format!(
+                "Param with name `{}` is defined multiple times:\nSecond declaration is:\n{}\n{}",
+                snd.name.id,
+                snd.start,
+                snd.src()
+            ),
+        }
+    }
+}
+impl<'src> WithParserLoc for BodyError<'src> {
+    fn loc(&self) -> crate::parser::ParserLoc {
+        match self {
+            BodyError::ReturnInCons { return_stmt } => return_stmt.loc(),
+            BodyError::UndefinedVariable { name } => name.loc(),
+            BodyError::AssignToConst { assign } => assign.loc(),
+            BodyError::AssignToExternalField { assign } => assign.loc(),
+            BodyError::TypeMismatch { expr } => expr.loc(),
+            BodyError::NonBoolCondition { condition } => condition.loc(),
+            BodyError::ReturnValueInVoid { return_stmt } => return_stmt.loc(),
+            BodyError::VoidReturnInValued { return_stmt } => return_stmt.loc(),
+            BodyError::UnreachableStmts { stmts } => {
+                ParserLoc::merge_from(stmts.first().unwrap(), stmts.last().unwrap())
+            },
+            BodyError::InvalidVoidReturningCall { call } => call.loc(),
+            BodyError::DuplicateParam { snd } => snd.loc(),
+        }
     }
 }

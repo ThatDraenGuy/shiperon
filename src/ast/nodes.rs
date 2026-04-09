@@ -147,6 +147,14 @@ pub enum ShipBodyMemberAll<'src> {
     VarDef(Rc<ShipVarDef<'src>>),
     Stmt(ShipStmtAll<'src>),
 }
+impl<'src> WithParserLoc for ShipBodyMemberAll<'src> {
+    fn loc(&self) -> crate::parser::ParserLoc {
+        match self {
+            ShipBodyMemberAll::VarDef(node) => node.loc(),
+            ShipBodyMemberAll::Stmt(stmt) => stmt.loc(),
+        }
+    }
+}
 
 impl<'src> Display for ShipBodyMemberAll<'src> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -164,6 +172,17 @@ pub enum ShipStmtAll<'src> {
     If(Rc<ShipIfStmt<'src>>),
     Return(Rc<ShipReturnStmt<'src>>),
     Call(Rc<ShipCallExpr<'src>>),
+}
+impl<'src> WithParserLoc for ShipStmtAll<'src> {
+    fn loc(&self) -> crate::parser::ParserLoc {
+        match self {
+            ShipStmtAll::Assign(node) => node.loc(),
+            ShipStmtAll::While(node) => node.loc(),
+            ShipStmtAll::If(node) => node.loc(),
+            ShipStmtAll::Return(node) => node.loc(),
+            ShipStmtAll::Call(node) => node.loc(),
+        }
+    }
 }
 
 impl<'src> Display for ShipStmtAll<'src> {

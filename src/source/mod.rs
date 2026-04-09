@@ -13,6 +13,7 @@ pub trait ByteSource<'src>: Debug {
     fn iter(&self) -> Self::Iter;
 
     fn source(&self, loc: ParserLoc) -> &'src [u8];
+    fn source_str(&self, loc: ParserLoc) -> &'src str;
 
     fn resolve(&self, loc: ParserLoc) -> (NodeLoc, NodeLoc);
 }

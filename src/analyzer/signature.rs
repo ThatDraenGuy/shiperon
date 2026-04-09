@@ -4,6 +4,7 @@ use std::iter::Map;
 use std::rc::Rc;
 
 use derive_more::Display;
+use itertools::Itertools;
 
 use crate::analyzer::stages::Stage1;
 use crate::analyzer::{AnalysisError, GeneralError};
@@ -11,7 +12,8 @@ use crate::ast::{
     ShipArgs, ShipClassDef, ShipClassMemberAll, ShipConsDef, ShipId, ShipMethodDef, ShipParams,
     ShipVarDef,
 };
-use crate::diagnostics::Renderable;
+use crate::diagnostics::{Diagnostic, ErrorLevel, Reason, Renderable};
+use crate::parser::{ParserLoc, WithParserLoc};
 
 pub type ClassDefRegistry<'src> = ClassNameRegistry<'src, Rc<ShipClassDef<'src>>>;
 
@@ -101,8 +103,19 @@ pub enum ConsError<'src> {
     NoMatchingCons { args: Rc<ShipArgs<'src>> },
 }
 impl<'src> Renderable<'src> for ConsError<'src> {
-    fn render(&self, src: &impl crate::ByteSource<'src>) -> String {
-        todo!()
+    fn render(&self, _src: &impl crate::ByteSource<'src>) -> String {
+        match self {
+            ConsError::NoMatchingCons { args: _ } => {
+                format!("No constructor overload matching argument types was found")
+            },
+        }
+    }
+}
+impl<'src> WithParserLoc for ConsError<'src> {
+    fn loc(&self) -> ParserLoc {
+        match self {
+            ConsError::NoMatchingCons { args } => args.loc(),
+        }
     }
 }
 
@@ -196,8 +209,23 @@ pub enum MethodError<'src> {
     NoOverload { args: Rc<ShipArgs<'src>> },
 }
 impl<'src> Renderable<'src> for MethodError<'src> {
-    fn render(&self, src: &impl crate::ByteSource<'src>) -> String {
-        todo!()
+    fn render(&self, _src: &impl crate::ByteSource<'src>) -> String {
+        match self {
+            MethodError::UndefinedMethod { name } => {
+                format!("Method with name `{}` was not found", name.id)
+            },
+            MethodError::NoOverload { args: _ } => {
+                format!("No overload matching argument types found")
+            },
+        }
+    }
+}
+impl<'src> WithParserLoc for MethodError<'src> {
+    fn loc(&self) -> ParserLoc {
+        match self {
+            MethodError::UndefinedMethod { name } => name.loc(),
+            MethodError::NoOverload { args } => args.loc(),
+        }
     }
 }
 
@@ -467,6 +495,56 @@ pub enum ClassError<'src> {
 
 impl<'src> Renderable<'src> for ClassError<'src> {
     fn render(&self, src: &impl crate::ByteSource<'src>) -> String {
-        todo!()
+        match self {
+            ClassError::CircularInheritance(circular_inheritance) => format!(
+                "Circular inheritance chain found:\n{}",
+                circular_inheritance
+                    .chain
+                    .iter()
+                    .map(|cls| src.source_str(
+                        cls.parent_id
+                            .as_ref()
+                            .map(|parent| ParserLoc::merge(cls.class_id.raw_loc, parent.raw_loc))
+                            .unwrap_or(cls.class_id.raw_loc)
+                    ))
+                    .join("\n")
+            ),
+            ClassError::DuplicateClassName { fst, snd } => format!(
+                "Class with name `{}` is defined multiple times:\nFirst declaration is:\n{}\n{}\nSecond declaration is:\n{}\n{}",
+                fst.class_id.id,
+                fst.start,
+                fst.src(),
+                snd.start,
+                snd.src()
+            ),
+            ClassError::DuplicateConstructor { fst, snd } => format!(
+                "Constructor with same param types is defined multiple times:\nFirst declaration is:\n{}\n{}\nSecond declaration is:\n{}\n{}",
+                fst.start,
+                fst.src(),
+                snd.start,
+                snd.src()
+            ),
+            ClassError::DuplicateField { fst, snd } => format!(
+                "Field with name `{}` is defined multiple times:\nFirst declaration is:\n{}\n{}\nSecond declaration is:\n{}\n{}",
+                fst.var_id.id,
+                fst.start,
+                fst.src(),
+                snd.start,
+                snd.src()
+            ),
+        }
+    }
+}
+
+impl<'src> WithParserLoc for ClassError<'src> {
+    fn loc(&self) -> ParserLoc {
+        match self {
+            ClassError::CircularInheritance(circular_inheritance) => {
+                circular_inheritance.chain.first().unwrap().loc()
+            },
+            ClassError::DuplicateClassName { fst: _, snd } => snd.loc(),
+            ClassError::DuplicateConstructor { fst: _, snd } => snd.loc(),
+            ClassError::DuplicateField { fst: _, snd } => snd.loc(),
+        }
     }
 }

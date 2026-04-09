@@ -17,7 +17,8 @@ use crate::{
         ShipCallExpr, ShipCallableExprAll, ShipClassDef, ShipExprAll, ShipId, ShipPrimaryAll,
         ShipVarDef,
     },
-    diagnostics::Renderable,
+    diagnostics::{Diagnostic, ErrorLevel, Reason, Renderable},
+    parser::WithParserLoc,
 };
 
 pub enum FieldExpr {
@@ -248,7 +249,27 @@ pub enum FieldError<'src> {
 }
 
 impl<'src> Renderable<'src> for FieldError<'src> {
-    fn render(&self, src: &impl crate::ByteSource<'src>) -> String {
-        todo!()
+    fn render(&self, _src: &impl crate::ByteSource<'src>) -> String {
+        match self {
+            FieldError::InvalidInitExpr { expr: _ } => {
+                format!("Only constructors & primitive allowed in field initializers")
+            },
+            FieldError::RecursiveInitExpr { call: _ } => {
+                format!("Recursive field initializer expressiondetected")
+            },
+            FieldError::UndefinedFieldName { name } => {
+                format!("Field with name `{}` was not found", name.id)
+            },
+        }
+    }
+}
+
+impl<'src> WithParserLoc for FieldError<'src> {
+    fn loc(&self) -> crate::parser::ParserLoc {
+        match self {
+            FieldError::InvalidInitExpr { expr } => expr.loc(),
+            FieldError::RecursiveInitExpr { call } => call.loc(),
+            FieldError::UndefinedFieldName { name } => name.loc(),
+        }
     }
 }

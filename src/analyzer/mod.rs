@@ -16,7 +16,8 @@ use crate::{
         signature::{ConsError, MethodError},
     },
     ast::{ShipId, ShipProgram},
-    diagnostics::{Diagnostic, Renderable},
+    diagnostics::{Diagnostic, ErrorLevel, Reason, Renderable},
+    parser::WithParserLoc,
 };
 
 use derive_more::{Display, From};
@@ -60,7 +61,18 @@ pub enum AnalysisError<'src> {
 
 impl<'src> From<AnalysisError<'src>> for Diagnostic<'src> {
     fn from(value: AnalysisError<'src>) -> Self {
-        todo!()
+        Diagnostic {
+            level: ErrorLevel::Err,
+            loc: match &value {
+                AnalysisError::General(e) => e.loc(),
+                AnalysisError::Class(e) => e.loc(),
+                AnalysisError::Field(e) => e.loc(),
+                AnalysisError::Cons(e) => e.loc(),
+                AnalysisError::Body(e) => e.loc(),
+                AnalysisError::Method(e) => e.loc(),
+            },
+            reason: value.into(),
+        }
     }
 }
 
@@ -84,13 +96,19 @@ pub enum GeneralError<'src> {
 }
 
 impl<'src> Renderable<'src> for GeneralError<'src> {
-    fn render(&self, src: &impl crate::ByteSource<'src>) -> String {
-        todo!()
+    fn render(&self, _src: &impl crate::ByteSource<'src>) -> String {
+        match self {
+            GeneralError::UndefinedClass { cls_name } => {
+                format!("Class with name `{}` was not found", cls_name.id)
+            },
+        }
     }
 }
 
-impl<'src> From<GeneralError<'src>> for Diagnostic<'src> {
-    fn from(value: GeneralError<'src>) -> Self {
-        todo!()
+impl<'src> WithParserLoc for GeneralError<'src> {
+    fn loc(&self) -> crate::parser::ParserLoc {
+        match self {
+            GeneralError::UndefinedClass { cls_name } => cls_name.loc(),
+        }
     }
 }
