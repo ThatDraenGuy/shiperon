@@ -1,5 +1,6 @@
 use super::registry::*;
 use std::collections::HashMap;
+use std::iter::Map;
 use std::rc::Rc;
 
 use derive_more::Display;
@@ -122,7 +123,7 @@ impl<T> WithMethodSignature for (T, MethodSignature) {
     }
 }
 
-impl<'src, C: WithClassSignature<'src>> ClassRegistry<C> {
+impl<'a, 'src: 'a, C: WithClassSignature<'src>> ClassRegistry<C> {
     pub fn get_cls(&self, cls_id: &ClassId) -> &C {
         match cls_id {
             ClassId::User(user_class_id) => self.get(&user_class_id),
@@ -131,13 +132,13 @@ impl<'src, C: WithClassSignature<'src>> ClassRegistry<C> {
         }
     }
     pub fn find_matching_method(
-        &self,
+        &'a self,
         cls_id: ClassId,
         name: &'src str,
         param_types: &[ClassId],
         name_node: &Rc<ShipId<'src>>,
         args_node: &Rc<ShipArgs<'src>>,
-    ) -> Result<(ClassId, MethodId), MethodError<'src>> {
+    ) -> Result<(ClassId, MethodId, &'a MethodSignature), MethodError<'src>> {
         match cls_id {
             ClassId::User(user_class_id) => {
                 let signature = self.get(&user_class_id).class_signature();
@@ -148,13 +149,20 @@ impl<'src, C: WithClassSignature<'src>> ClassRegistry<C> {
                 methods
                     .get(&name_id)
                     .iter()
-                    .filter_map(|(overload_id, data)| {
-                        let (is_match, degree) =
-                            data.method_signature().params.matches(param_types, self);
+                    .map(|(overload_id, data)| (overload_id, data.method_signature()))
+                    .filter_map(|(overload_id, method_signature)| {
+                        let (is_match, degree) = method_signature.params.matches(param_types, self);
                         if is_match { Some((overload_id, degree)) } else { None }
                     })
                     .min_by(|fst, snd| fst.1.cmp(&snd.1))
-                    .map(|(overload_id, _degree)| Ok((cls_id, (name_id, overload_id).into())))
+                    .map(|(overload_id, _degree)| {
+                        let method_id = MethodId::from((name_id, overload_id));
+                        Ok((
+                            cls_id,
+                            method_id,
+                            methods.registry().get_method(&method_id).method_signature(),
+                        ))
+                    })
                     .unwrap_or_else(|| {
                         let parent = signature.parent;
                         if parent == LibClassId::Class.into() {

@@ -5,11 +5,11 @@ use derive_more::Display;
 use crate::{
     analyzer::{
         AnalysisError,
-        expr::{Expr, ExprModel},
-        field::ClassWithFieldRegistry,
+        expr::{CallExpr, Expr, ExprModel},
+        field::{ClassWithFieldRegistry, FieldModel, WithClassFields},
         registry::{
-            ClassId, ConsId, ConsRegistry, FieldId, LibClassId, MethodId, MethodRegistry,
-            UserClassId, VarId, VarNameRegistryBuilder,
+            ClassId, ClassRegistry, ConsId, ConsRegistry, FieldId, LibClassId, MethodId,
+            MethodRegistry, UserClassId, VarId, VarNameRegistryBuilder,
         },
         signature::{
             ClassSignature, MethodSignature, ParamsSignature, WithClassSignature,
@@ -21,13 +21,13 @@ use crate::{
 };
 
 enum ScopeType {
-    Global,
-    Class(ClassId),
+    // Global,
+    // Class(ClassId),
     Method(MethodId),
     Cons(ConsId),
     While,
     If,
-    Else,
+    // Else,
 }
 
 pub struct VarSignature {
@@ -36,7 +36,7 @@ pub struct VarSignature {
 }
 
 pub type VarSignatureRegistry<'src> = VarNameRegistryBuilder<'src, VarSignature>;
-pub struct Scope<'src> {
+pub struct BodyScope<'src> {
     scope_type: ScopeType,
     vars: VarSignatureRegistry<'src>,
 }
@@ -47,43 +47,56 @@ pub enum BodyReturn<T> {
     Value(T),
 }
 
+pub enum ScopeVar<'a> {
+    Var(VarId, &'a VarSignature),
+    Field(FieldId, &'a FieldModel),
+    Global,
+}
+
 pub struct ScopeStack<'src> {
-    inner: LinkedList<Scope<'src>>,
+    inner: LinkedList<BodyScope<'src>>,
     pub curr_cls: UserClassId,
     pub expected_return: Option<Option<ClassId>>,
 }
 
 impl<'src> ScopeStack<'src> {
     fn new_cons(cls: UserClassId) -> Self {
-        let inner = LinkedList::new(); //TODO
+        let inner = LinkedList::new(); //TODO parent fields!!!
         Self { inner, curr_cls: cls, expected_return: None }
     }
     fn new_method(cls: UserClassId, return_type: Option<ClassId>) -> Self {
-        let inner = LinkedList::new(); //TODO
+        let inner = LinkedList::new(); //TODO parent fields!!!
         Self { inner, curr_cls: cls, expected_return: Some(return_type) }
     }
 
     fn enter(&mut self, scope_type: ScopeType) {
-        self.inner.push_front(Scope { scope_type, vars: VarSignatureRegistry::default() });
+        self.inner.push_front(BodyScope { scope_type, vars: VarSignatureRegistry::default() });
     }
 
-    fn exit(&mut self) -> Scope {
+    fn exit(&mut self) -> BodyScope {
         self.inner.pop_front().unwrap()
     }
 
-    fn curr(&self) -> &Scope<'src> {
+    pub fn curr(&self) -> &BodyScope<'src> {
         self.inner.front().unwrap()
     }
 
-    fn curr_mut(&mut self) -> &mut Scope<'src> {
+    pub fn curr_mut(&mut self) -> &mut BodyScope<'src> {
         self.inner.front_mut().unwrap()
     }
 
-    fn find_var(&self, name: &'src str) -> Option<(VarId, &VarSignature)> {
+    pub fn find_var<'a, V: WithClassSignature<'src> + WithClassFields>(
+        &'a self,
+        registry: &'a ClassRegistry<V>,
+        name: &Rc<ShipId<'src>>,
+    ) -> Option<ScopeVar<'a>> {
         for scope in &self.inner {
-            if let Some(id) = scope.vars.curr().get_by_name(name) {
-                return Some((id, scope.vars.curr().get(&id)));
+            if let Some(id) = scope.vars.curr().get_by_name(name.id) {
+                return Some(ScopeVar::Var(id, scope.vars.curr().get(&id)));
             }
+        }
+        if let Ok((field_id, field_model)) = registry.find_field(self.curr_cls.into(), name) {
+            return Some(ScopeVar::Field(field_id, field_model));
         }
         None
     }
@@ -118,50 +131,14 @@ impl Body {
                     ShipBodyMemberAll::Stmt(stmt) => match stmt {
                         ShipStmtAll::Assign(assign) => {
                             let value = ExprModel::resolve(registry, scopes, &assign.value, errors);
-                            let target = match &assign.target {
-                                ShipAssignableExprAll::MemberAccess(node) => todo!(),
-                                ShipAssignableExprAll::Variable(var_name) => {
-                                    match scopes.find_var(var_name.id) {
-                                        Some((var_id, var_signature)) => {
-                                            if !registry
-                                                .registry()
-                                                .is_cls_subcls_of(
-                                                    value.expr_type,
-                                                    var_signature.var_type,
-                                                )
-                                                .0
-                                            {
-                                                errors.push(
-                                                    BodyError::TypeMismatch {
-                                                        expr: assign.value.clone(),
-                                                    }
-                                                    .into(),
-                                                );
-                                                AssignTarget::Invalid
-                                            } else if !var_signature.mutable {
-                                                errors.push(
-                                                    BodyError::AssignToConst {
-                                                        assign: assign.clone(),
-                                                    }
-                                                    .into(),
-                                                );
-                                                AssignTarget::Invalid
-                                            } else {
-                                                AssignTarget::Var(var_id)
-                                            }
-                                        },
-                                        None => {
-                                            errors.push(
-                                                BodyError::UndefinedVariable {
-                                                    name: var_name.clone(),
-                                                }
-                                                .into(),
-                                            );
-                                            AssignTarget::Invalid
-                                        },
-                                    }
-                                },
-                            };
+                            let target = ExprModel::resolve_assignable(
+                                registry,
+                                &assign.target,
+                                scopes,
+                                value.expr_type,
+                                &assign.value,
+                                errors,
+                            );
                             Stmt::Assign(target, value)
                         },
                         ShipStmtAll::While(while_node) => {
@@ -212,113 +189,9 @@ impl Body {
                             Stmt::If { condition, then_body, else_body }
                         },
                         ShipStmtAll::Call(call_node) => {
-                            fn resolve_method_call<'src>(
-                                registry: &ClassWithFieldRegistry<'src>,
-                                scopes: &mut ScopeStack<'src>,
-                                object_type: ClassId,
-                                method_name: &Rc<ShipId<'src>>,
-                                method_args: &Rc<ShipArgs<'src>>,
-                                errors: &mut Vec<AnalysisError<'src>>,
-                            ) -> Stmt {
-                                let args =
-                                    ExprModel::resolve_args(registry, scopes, &method_args, errors);
-                                let arg_types: Vec<_> =
-                                    args.iter().map(|arg| arg.expr_type).collect();
-
-                                registry
-                                    .registry()
-                                    .find_matching_method(
-                                        object_type,
-                                        method_name.id,
-                                        &arg_types,
-                                        method_name,
-                                        &method_args,
-                                    )
-                                    .map(|(cls_id, method_id)| Stmt::MethodCall {
-                                        class: cls_id,
-                                        method: method_id,
-                                        args,
-                                    })
-                                    .unwrap_or_else(|e| {
-                                        errors.push(e.into());
-                                        Stmt::Invalid
-                                    })
-                            }
-                            fn resolve_cons_call<'src>(
-                                registry: &ClassWithFieldRegistry<'src>,
-                                scopes: &mut ScopeStack<'src>,
-                                cls_id: ClassId,
-                                cons_args: &Rc<ShipArgs<'src>>,
-                                errors: &mut Vec<AnalysisError<'src>>,
-                            ) -> Stmt {
-                                let args =
-                                    ExprModel::resolve_args(registry, scopes, cons_args, errors);
-                                let arg_types: Vec<_> =
-                                    args.iter().map(|arg| arg.expr_type).collect();
-
-                                registry
-                                    .registry()
-                                    .get_cls(&cls_id)
-                                    .class_signature()
-                                    .constructors
-                                    .find_matching_cons(&arg_types, registry.registry(), cons_args)
-                                    .map(|(cons_id, _cons_data)| Stmt::ConsCall {
-                                        class: scopes.curr_cls.into(),
-                                        cons: cons_id,
-                                        args,
-                                    })
-                                    .unwrap_or_else(|e| {
-                                        errors.push(e.into());
-                                        Stmt::Invalid
-                                    })
-                            }
-
-                            match &call_node.expr {
-                                ShipCallableExprAll::MemberAccess(member_access) => {
-                                    let expr = ExprModel::resolve(
-                                        registry,
-                                        scopes,
-                                        &member_access.expr,
-                                        errors,
-                                    );
-                                    resolve_method_call(
-                                        registry,
-                                        scopes,
-                                        expr.expr_type,
-                                        &member_access.member_id,
-                                        &call_node.args,
-                                        errors,
-                                    )
-                                },
-                                ShipCallableExprAll::This(_) => resolve_cons_call(
-                                    registry,
-                                    scopes,
-                                    scopes.curr_cls.into(),
-                                    &call_node.args,
-                                    errors,
-                                ),
-                                ShipCallableExprAll::Cons(id_node) => {
-                                    if let Some(cls_id) = registry.get_by_name(id_node.id) {
-                                        resolve_cons_call(
-                                            registry,
-                                            scopes,
-                                            cls_id.into(),
-                                            &call_node.args,
-                                            errors,
-                                        )
-                                    } else {
-                                        resolve_method_call(
-                                            registry,
-                                            scopes,
-                                            scopes.curr_cls.into(),
-                                            id_node,
-                                            &call_node.args,
-                                            errors,
-                                        )
-                                    }
-                                },
-                                ShipCallableExprAll::Super(node) => todo!(),
-                            }
+                            let call_expr =
+                                ExprModel::resolve_callable(registry, call_node, scopes, errors);
+                            Stmt::Call(call_expr.1)
                         },
                         ShipStmtAll::Return(return_stmt) => {
                             return Self {
@@ -405,7 +278,7 @@ impl Body {
 
 pub enum AssignTarget {
     Var(VarId),
-    Field(ClassId, FieldId),
+    Field(ExprModel, FieldId),
     Invalid,
 }
 
@@ -414,8 +287,7 @@ pub enum Stmt {
     Assign(AssignTarget, ExprModel),
     While { condition: ExprModel, body: Body },
     If { condition: ExprModel, then_body: Body, else_body: Option<Body> },
-    MethodCall { class: ClassId, method: MethodId, args: Vec<ExprModel> },
-    ConsCall { class: ClassId, cons: ConsId, args: Vec<ExprModel> },
+    Call(CallExpr),
     Invalid,
 }
 
@@ -484,7 +356,9 @@ pub enum BodyError<'src> {
     #[display("undefined variable")]
     UndefinedVariable { name: Rc<ShipId<'src>> },
     #[display("assign to a const variable")]
-    AssignToConst { assign: Rc<ShipAssignStmt<'src>> },
+    AssignToConst { assign: ShipAssignableExprAll<'src> },
+    #[display("assign into external class field")]
+    AssignToExternalField { assign: ShipAssignableExprAll<'src> },
     #[display("assign with a wrong type")]
     TypeMismatch { expr: ShipExprAll<'src> },
     #[display("non boolean condition")]
@@ -495,6 +369,8 @@ pub enum BodyError<'src> {
     VoidReturnInValued { return_stmt: Rc<ShipReturnStmt<'src>> },
     #[display("unreachable code")]
     UnreachableStmts { stmts: Vec<ShipBodyMemberAll<'src>> },
+    #[display("void returning method call in non void context")]
+    InvalidVoidReturningCall { call: Rc<ShipCallExpr<'src>> },
 }
 impl<'src> Renderable<'src> for BodyError<'src> {
     fn render(&self, src: &impl crate::ByteSource<'src>) -> String {

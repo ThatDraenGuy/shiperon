@@ -7,14 +7,15 @@ use crate::{
         AnalysisError, GeneralError,
         expr::PrimitiveExpr,
         registry::{
-            ClassId, ClassNameRegistry, ConsId, FieldId, FieldRegistry, FieldRegistryBuilder,
-            LibClassId,
+            ClassId, ClassNameRegistry, ClassRegistry, ConsId, FieldId, FieldRegistry,
+            FieldRegistryBuilder, LibClassId,
         },
         signature::{ClassSignature, ClassSignatureRegistry, WithClassSignature},
         stages::Stage2,
     },
     ast::{
-        ShipCallExpr, ShipCallableExprAll, ShipClassDef, ShipExprAll, ShipPrimaryAll, ShipVarDef,
+        ShipCallExpr, ShipCallableExprAll, ShipClassDef, ShipExprAll, ShipId, ShipPrimaryAll,
+        ShipVarDef,
     },
     diagnostics::Renderable,
 };
@@ -185,6 +186,24 @@ impl WithClassFields for ClassFields {
         self
     }
 }
+impl<'src, V: WithClassFields + WithClassSignature<'src>> ClassRegistry<V> {
+    pub fn find_field(
+        &self,
+        cls_id: ClassId,
+        field_name: &Rc<ShipId<'src>>,
+    ) -> Result<(FieldId, &FieldModel), FieldError<'src>> {
+        let cls = self.get_cls(&cls_id);
+        let signature = cls.class_signature();
+        let fields = cls.class_fields();
+        if let Some(field_id) = signature.fields.get_by_name(field_name.id) {
+            Ok((field_id, fields.registry.get(&field_id)))
+        } else if cls_id == LibClassId::Class.into() {
+            Err(FieldError::UndefinedFieldName { name: field_name.clone() })
+        } else {
+            self.find_field(signature.parent, field_name)
+        }
+    }
+}
 
 pub type ClassWithFieldRegistry<'src> = ClassNameRegistry<'src, Stage2<'src>>;
 
@@ -224,6 +243,8 @@ pub enum FieldError<'src> {
     InvalidInitExpr { expr: ShipExprAll<'src> },
     #[display("field init expr invokes owning class cons")]
     RecursiveInitExpr { call: Rc<ShipCallExpr<'src>> },
+    #[display("undefined field")]
+    UndefinedFieldName { name: Rc<ShipId<'src>> },
 }
 
 impl<'src> Renderable<'src> for FieldError<'src> {
