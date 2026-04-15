@@ -1,11 +1,9 @@
 use crate::analyzer::{
     AnalysisError,
     body::{ConsBodyRegistry, MethodBodyRegistry},
-    def::{ClassDefsRegistry, ClassMemberNamesRegistry},
-    field::{ClassFields, ClassFieldsRegistry},
-    registry::ClassNameRegistry,
-    signature::{ClassSignature, ClassSignatureRegistry},
-    stdlib::ShipStdLib,
+    def::ClassDefsRegistry,
+    field::ClassFields,
+    signature::ClassSignature,
 };
 
 use super::{
@@ -69,12 +67,8 @@ impl ClassModel {
 pub type ClassModelRegistry = ClassRegistry<ClassModel>;
 
 impl ClassModelRegistry {
-    pub fn new<'src>(
-        stdlib: &ShipStdLib,
-        cls_names: &ClassNameRegistry<'src>,
-        member_names: &ClassMemberNamesRegistry<'src>,
-        signatures: ClassSignatureRegistry,
-        fields: ClassFieldsRegistry,
+    pub fn new<'a, 'src>(
+        ctx: super::BodyResolutionCtx<'a, 'src>,
         defs: &ClassDefsRegistry<'src>,
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> Self {
@@ -85,20 +79,7 @@ impl ClassModelRegistry {
                     .constructors
                     .iter()
                     .map(|(cons_id, cons_def)| {
-                        (
-                            cons_id,
-                            ConsBody::resolve(
-                                stdlib,
-                                cls_names,
-                                member_names,
-                                &signatures,
-                                &fields,
-                                cls_id,
-                                cons_id,
-                                cons_def,
-                                errors,
-                            ),
-                        )
+                        (cons_id, ConsBody::resolve(&ctx, cls_id, cons_id, cons_def, errors))
                     })
                     .collect();
 
@@ -114,11 +95,7 @@ impl ClassModelRegistry {
                                     (
                                         method_overload_id,
                                         MethodBody::resolve(
-                                            stdlib,
-                                            cls_names,
-                                            member_names,
-                                            &signatures,
-                                            &fields,
+                                            &ctx,
                                             cls_id,
                                             (method_name_id, method_overload_id).into(),
                                             method_def,
@@ -133,7 +110,7 @@ impl ClassModelRegistry {
                 (cls_id, (method_bodies, cons_bodies))
             })
             .collect();
-        signatures.combine(fields, |signature, field| (signature, field)).combine(
+        ctx.cls_signatures.combine(ctx.cls_fields, |signature, field| (signature, field)).combine(
             bodies,
             |(signature, fields), (method_bodies, cons_bodies)| {
                 ClassModel::new(signature, fields, method_bodies, cons_bodies)

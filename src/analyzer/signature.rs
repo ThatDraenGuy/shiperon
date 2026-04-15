@@ -6,8 +6,8 @@ use derive_more::Display;
 use itertools::Itertools;
 
 use crate::analyzer::AnalysisError;
-use crate::analyzer::def::{ClassDefsRegistry, ClassMemberNamesRegistry};
-use crate::analyzer::stdlib::ShipStdLib;
+use crate::analyzer::def::{ClassDefsRegistry, ClassMemberNamesCtx, GetMemberNamesCtx};
+use crate::analyzer::stdlib::StdlibCtx;
 use crate::ast::{
     ShipArgs, ShipClassDef, ShipConsDef, ShipId, ShipMethodDef, ShipParams, ShipVarDef,
 };
@@ -25,9 +25,8 @@ impl ParamsSignature {
 
     pub fn matches<'src>(
         &self,
-        stdlib: &ShipStdLib,
+        ctx: &impl GetClsSignatureCtx,
         arg_types: &[ClassId],
-        registry: &ClassSignatureRegistry,
     ) -> (bool, u8) {
         if arg_types.len() != self.param_types.len() {
             (false, 0)
@@ -35,7 +34,7 @@ impl ParamsSignature {
             self.param_types
                 .iter()
                 .zip(arg_types)
-                .map(|(param, arg)| registry.is_cls_subcls_of(stdlib, *arg, *param))
+                .map(|(param, arg)| ctx.is_cls_subcls_of(*arg, *param))
                 .reduce(|(valid, degree), (is_subcls, diff)| match (valid, is_subcls) {
                     (true, true) => (true, degree + diff),
                     (true, false) => (false, 0),
@@ -53,15 +52,13 @@ impl ParamsSignature {
 impl ConsSignatureRegistry {
     pub fn find_matching_cons<'src>(
         &self,
-        stdlib: &ShipStdLib,
+        ctx: &impl GetClsSignatureCtx,
         param_types: &[ClassId],
-        cls_signatures: &ClassSignatureRegistry,
         node: &Rc<ShipArgs<'src>>,
     ) -> Result<(ConsId, &ParamsSignature), ConsError<'src>> {
         self.iter()
             .filter_map(|(cons_id, cons_signature)| {
-                let (is_match, degree) =
-                    cons_signature.matches(&stdlib, param_types, cls_signatures);
+                let (is_match, degree) = cons_signature.matches(ctx, param_types);
                 if is_match { Some((cons_id, degree)) } else { None }
             })
             .min_by(|fst, snd| fst.1.cmp(&snd.1))
@@ -146,22 +143,34 @@ pub const INVALID_CLS_SIGNATURE: ClassSignature = ClassSignature {
 
 pub type ClassSignatureRegistry = Registry<UserClassId, ClassSignature>;
 
-impl ClassSignatureRegistry {
-    pub fn get_cls_signature<'a>(
-        &'a self,
-        stdlib: &'a ShipStdLib,
-        cls_id: &ClassId,
-    ) -> &'a ClassSignature {
+pub trait ClassSignatureCtx {
+    fn signatures(&self) -> &ClassSignatureRegistry;
+}
+impl ClassSignatureCtx for ClassSignatureRegistry {
+    fn signatures(&self) -> &ClassSignatureRegistry {
+        self
+    }
+}
+
+pub trait GetClsSignatureCtx: StdlibCtx + ClassSignatureCtx {
+    fn get_cls_signature(&self, cls_id: &ClassId) -> &ClassSignature;
+    fn is_cls_subcls_of<C: Into<ClassId>, P: Into<ClassId>>(
+        &self,
+        child: C,
+        parent: P,
+    ) -> (bool, u8);
+}
+impl<Ctx: StdlibCtx + ClassSignatureCtx> GetClsSignatureCtx for Ctx {
+    fn get_cls_signature(&self, cls_id: &ClassId) -> &ClassSignature {
         match cls_id {
-            ClassId::User(user_class_id) => self.get(user_class_id),
-            ClassId::Lib(lib_class_id) => stdlib.cls_signature(lib_class_id),
-            ClassId::Invalid => stdlib.invalid_signature(),
+            ClassId::User(user_class_id) => self.signatures().get(user_class_id),
+            ClassId::Lib(lib_class_id) => self.stdlib().cls_signature(lib_class_id),
+            ClassId::Invalid => self.stdlib().invalid_signature(),
         }
     }
 
-    pub fn is_cls_subcls_of<C: Into<ClassId>, P: Into<ClassId>>(
+    fn is_cls_subcls_of<C: Into<ClassId>, P: Into<ClassId>>(
         &self,
-        stdlib: &ShipStdLib,
         child: C,
         parent: P,
     ) -> (bool, u8) {
@@ -175,27 +184,41 @@ impl ClassSignatureRegistry {
             if current == LibClassId::Class.into() || current == ClassId::Invalid {
                 return (false, diff);
             }
-            let signature = self.get_cls_signature(stdlib, &current);
+            let signature = self.get_cls_signature(&current);
             current = signature.parent;
             diff += 1;
         }
     }
+}
 
-    pub fn find_matching_method<'a, 'src>(
-        &'a self,
-        stdlib: &'a ShipStdLib,
-        member_names: &ClassMemberNamesRegistry<'src>,
+pub trait FindMatchingMethodCtx<'src>:
+    StdlibCtx + ClassSignatureCtx + ClassMemberNamesCtx<'src>
+{
+    fn find_matching_method(
+        &self,
         cls_id: ClassId,
         name: &'src str,
         param_types: &[ClassId],
         name_node: &Rc<ShipId<'src>>,
         args_node: &Rc<ShipArgs<'src>>,
-    ) -> Result<(ClassId, MethodId, &'a MethodSignature), MethodError<'src>> {
-        let signature = self.get_cls_signature(stdlib, &cls_id);
+    ) -> Result<(ClassId, MethodId, &MethodSignature), MethodError<'src>>;
+}
+impl<'src, Ctx: StdlibCtx + ClassSignatureCtx + ClassMemberNamesCtx<'src>>
+    FindMatchingMethodCtx<'src> for Ctx
+{
+    fn find_matching_method(
+        &self,
+        cls_id: ClassId,
+        name: &'src str,
+        param_types: &[ClassId],
+        name_node: &Rc<ShipId<'src>>,
+        args_node: &Rc<ShipArgs<'src>>,
+    ) -> Result<(ClassId, MethodId, &MethodSignature), MethodError<'src>> {
+        let signature = self.get_cls_signature(&cls_id);
         let methods = &signature.methods;
 
-        let name_id = member_names
-            .get_member_names(stdlib, &cls_id)
+        let name_id = self
+            .get_member_names(&cls_id)
             .methods
             .get_by_name(name)
             .ok_or(MethodError::UndefinedMethod { name: name_node.clone() })?;
@@ -204,7 +227,7 @@ impl ClassSignatureRegistry {
             .get(&name_id)
             .iter()
             .filter_map(|(overload_id, method_signature)| {
-                let (is_match, degree) = method_signature.params.matches(stdlib, param_types, self);
+                let (is_match, degree) = method_signature.params.matches(self, param_types);
                 if is_match { Some((overload_id, degree)) } else { None }
             })
             .min_by(|fst, snd| fst.1.cmp(&snd.1))
@@ -217,15 +240,8 @@ impl ClassSignatureRegistry {
                 if parent == LibClassId::Class.into() || parent == ClassId::Invalid {
                     Err(MethodError::NoOverload { args: args_node.clone() })
                 } else {
-                    match self.find_matching_method(
-                        stdlib,
-                        member_names,
-                        parent,
-                        name,
-                        param_types,
-                        name_node,
-                        args_node,
-                    ) {
+                    match self.find_matching_method(parent, name, param_types, name_node, args_node)
+                    {
                         Ok(res) => Ok(res),
                         Err(_) => Err(MethodError::NoOverload { args: args_node.clone() }),
                     }

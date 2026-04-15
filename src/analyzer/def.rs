@@ -8,7 +8,7 @@ use crate::{
             RegistryBuilder, UserClassId,
         },
         signature::ClassError,
-        stdlib::ShipStdLib,
+        stdlib::StdlibCtx,
     },
     ast::{ShipClassDef, ShipClassMemberAll, ShipConsDef, ShipId, ShipMethodDef, ShipVarDef},
 };
@@ -21,13 +21,25 @@ pub struct ClassMemberNames<'src> {
 
 pub type ClassMemberNamesRegistry<'src> = ClassRegistry<ClassMemberNames<'src>>;
 
-impl<'src> ClassMemberNamesRegistry<'src> {
-    pub fn get_member_names<'a>(
-        &'a self,
-        stdlib: &'a ShipStdLib,
-        cls_id: &ClassId,
-    ) -> &'a ClassMemberNames {
-        todo!()
+pub trait ClassMemberNamesCtx<'src> {
+    fn member_names(&self) -> &ClassMemberNamesRegistry<'src>;
+}
+impl<'src> ClassMemberNamesCtx<'src> for ClassMemberNamesRegistry<'src> {
+    fn member_names(&self) -> &ClassMemberNamesRegistry<'src> {
+        self
+    }
+}
+
+pub trait GetMemberNamesCtx<'src>: StdlibCtx + ClassMemberNamesCtx<'src> {
+    fn get_member_names(&self, cls_id: &ClassId) -> &ClassMemberNames<'src>;
+}
+impl<'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src>> GetMemberNamesCtx<'src> for Ctx {
+    fn get_member_names(&self, cls_id: &ClassId) -> &ClassMemberNames<'src> {
+        match cls_id {
+            ClassId::User(user_class_id) => self.member_names().get(user_class_id),
+            ClassId::Lib(lib_class_id) => self.stdlib().cls_member_names(lib_class_id),
+            ClassId::Invalid => self.stdlib().invalid_member_names(),
+        }
     }
 }
 
@@ -77,7 +89,7 @@ fn init_class_members_registry<'src>(
     let (field_names, field_defs) = fields_builder.build();
     let cons_defs = cons_builder.build();
     let (method_names, method_builders) = methods_builder.build();
-    let method_defs = method_builders.transform(|id, builder| builder.build());
+    let method_defs = method_builders.transform(|_id, builder| builder.build());
 
     (
         ClassMemberNames { methods: method_names, fields: field_names },
@@ -108,6 +120,15 @@ pub fn init_cls_registry<'src>(
     let (names, data) = builder.build();
     let (member_names, defs) = data.split();
     (names, member_names, defs)
+}
+
+pub trait ClassNamesCtx<'src> {
+    fn cls_names(&self) -> &ClassNameRegistry<'src>;
+}
+impl<'src> ClassNamesCtx<'src> for ClassNameRegistry<'src> {
+    fn cls_names(&self) -> &ClassNameRegistry<'src> {
+        self
+    }
 }
 
 impl<'src> ClassNameRegistry<'src> {

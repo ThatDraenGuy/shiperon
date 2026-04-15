@@ -1,24 +1,45 @@
-use crate::analyzer::{field::ClassFields, registry::LibClassId, signature::ClassSignature};
+use std::collections::HashMap;
+
+use crate::analyzer::{
+    def::ClassMemberNames, field::ClassFields, registry::LibClassId, signature::ClassSignature,
+};
 
 const STD_SRC: &[u8; 3555] = include_bytes!("std.po");
 
 pub struct ShipStdLib {
+    inner: HashMap<LibClassId, (ClassSignature, ClassFields, ClassMemberNames<'static>)>,
     invalid_cls: ClassSignature,
     invalid_fields: ClassFields,
+    invalid_member_names: ClassMemberNames<'static>,
 }
 
 impl ShipStdLib {
     pub fn cls_signature(&self, cls_id: &LibClassId) -> &ClassSignature {
-        todo!()
+        &self.inner.get(cls_id).unwrap().0
     }
     pub fn cls_fields(&self, cls_id: &LibClassId) -> &ClassFields {
-        todo!()
+        &self.inner.get(cls_id).unwrap().1
+    }
+    pub fn cls_member_names(&self, cls_id: &LibClassId) -> &ClassMemberNames<'static> {
+        &self.inner.get(cls_id).unwrap().2
     }
     pub fn invalid_signature(&self) -> &ClassSignature {
         &self.invalid_cls
     }
     pub fn invalid_fields(&self) -> &ClassFields {
         &self.invalid_fields
+    }
+    pub fn invalid_member_names(&self) -> &ClassMemberNames<'static> {
+        &self.invalid_member_names
+    }
+}
+
+pub trait StdlibCtx {
+    fn stdlib(&self) -> &ShipStdLib;
+}
+impl StdlibCtx for ShipStdLib {
+    fn stdlib(&self) -> &ShipStdLib {
+        self
     }
 }
 

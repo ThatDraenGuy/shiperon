@@ -12,11 +12,15 @@ use std::rc::Rc;
 use crate::{
     analyzer::{
         body::BodyError,
-        def::init_cls_registry,
-        field::{FieldError, init_class_fields_registry},
+        def::{ClassMemberNamesCtx, ClassMemberNamesRegistry, ClassNamesCtx, init_cls_registry},
+        field::{ClassFieldsCtx, ClassFieldsRegistry, FieldError, init_class_fields_registry},
         model::ClassModelRegistry,
-        signature::{ConsError, MethodError, init_cls_signature_registry},
-        stdlib::ShipStdLib,
+        registry::ClassNameRegistry,
+        signature::{
+            ClassSignatureCtx, ClassSignatureRegistry, ConsError, MethodError,
+            init_cls_signature_registry,
+        },
+        stdlib::{ShipStdLib, StdlibCtx},
     },
     ast::{ShipId, ShipProgram},
     diagnostics::{Diagnostic, ErrorLevel, Renderable},
@@ -39,19 +43,78 @@ impl<'src> Analyzer<'src> {
 
         let (cls_names, member_names, defs) = init_cls_registry(&self.ast.classes, &mut errors);
         let cls_signatures = init_cls_signature_registry(&cls_names, &defs, &mut errors);
-        let cls_fields =
-            init_class_fields_registry(stdlib, &cls_signatures, &cls_names, &defs, &mut errors);
+        let cls_fields = init_class_fields_registry(
+            &FieldResolutionCtx { stdlib, cls_signatures: &cls_signatures, cls_names: &cls_names },
+            &defs,
+            &mut errors,
+        );
 
         let result = ClassModelRegistry::new(
-            stdlib,
-            &cls_names,
-            &member_names,
-            cls_signatures,
-            cls_fields,
+            BodyResolutionCtx {
+                stdlib,
+                cls_names: &cls_names,
+                cls_member_names: &member_names,
+                cls_signatures,
+                cls_fields,
+            },
             &defs,
             &mut errors,
         );
         (result, errors.into_iter().map(|e| e.into()).collect())
+    }
+}
+
+struct FieldResolutionCtx<'a, 'src> {
+    stdlib: &'a ShipStdLib,
+    cls_signatures: &'a ClassSignatureRegistry,
+    cls_names: &'a ClassNameRegistry<'src>,
+}
+impl<'a, 'src> StdlibCtx for FieldResolutionCtx<'a, 'src> {
+    fn stdlib(&self) -> &ShipStdLib {
+        self.stdlib
+    }
+}
+impl<'a, 'src> ClassSignatureCtx for FieldResolutionCtx<'a, 'src> {
+    fn signatures(&self) -> &ClassSignatureRegistry {
+        self.cls_signatures
+    }
+}
+impl<'a, 'src> ClassNamesCtx<'src> for FieldResolutionCtx<'a, 'src> {
+    fn cls_names(&self) -> &ClassNameRegistry<'src> {
+        self.cls_names
+    }
+}
+
+pub struct BodyResolutionCtx<'a, 'src> {
+    stdlib: &'a ShipStdLib,
+    cls_names: &'a ClassNameRegistry<'src>,
+    cls_member_names: &'a ClassMemberNamesRegistry<'src>,
+    cls_signatures: ClassSignatureRegistry,
+    cls_fields: ClassFieldsRegistry,
+}
+impl<'a, 'src> StdlibCtx for BodyResolutionCtx<'a, 'src> {
+    fn stdlib(&self) -> &ShipStdLib {
+        self.stdlib
+    }
+}
+impl<'a, 'src> ClassSignatureCtx for BodyResolutionCtx<'a, 'src> {
+    fn signatures(&self) -> &ClassSignatureRegistry {
+        &self.cls_signatures
+    }
+}
+impl<'a, 'src> ClassNamesCtx<'src> for BodyResolutionCtx<'a, 'src> {
+    fn cls_names(&self) -> &ClassNameRegistry<'src> {
+        self.cls_names
+    }
+}
+impl<'a, 'src> ClassMemberNamesCtx<'src> for BodyResolutionCtx<'a, 'src> {
+    fn member_names(&self) -> &ClassMemberNamesRegistry<'src> {
+        self.cls_member_names
+    }
+}
+impl<'a, 'src> ClassFieldsCtx for BodyResolutionCtx<'a, 'src> {
+    fn cls_fields(&self) -> &ClassFieldsRegistry {
+        &self.cls_fields
     }
 }
 

@@ -5,14 +5,14 @@ use derive_more::Display;
 use crate::{
     analyzer::{
         AnalysisError, GeneralError,
-        def::{ClassDefsRegistry, ClassMemberNamesRegistry},
+        def::{ClassDefsRegistry, ClassMemberNamesCtx, ClassNamesCtx, GetMemberNamesCtx},
         expr::PrimitiveExpr,
         registry::{
-            ClassId, ClassNameRegistry, ClassRegistry, ConsId, FieldId, FieldRegistry,
-            FieldRegistryBuilder, LibClassId,
+            ClassId, ClassRegistry, ConsId, FieldId, FieldRegistry, FieldRegistryBuilder,
+            LibClassId,
         },
-        signature::{ClassSignature, ClassSignatureRegistry},
-        stdlib::ShipStdLib,
+        signature::{ClassSignature, ClassSignatureCtx, GetClsSignatureCtx},
+        stdlib::StdlibCtx,
     },
     ast::{ShipCallExpr, ShipCallableExprAll, ShipExprAll, ShipId, ShipPrimaryAll, ShipVarDef},
     diagnostics::Renderable,
@@ -33,6 +33,12 @@ impl From<PrimitiveExpr> for FieldExpr {
 pub struct FieldModel {
     pub field_type: ClassId,
     pub init_expr: FieldExpr,
+}
+
+pub trait FieldResolutionCtx<'src>: StdlibCtx + ClassSignatureCtx + ClassNamesCtx<'src> {}
+impl<'src, Ctx: StdlibCtx + ClassSignatureCtx + ClassNamesCtx<'src>> FieldResolutionCtx<'src>
+    for Ctx
+{
 }
 
 impl FieldModel {
@@ -80,9 +86,7 @@ impl FieldModel {
     }
 
     fn resolve_call<'src>(
-        stdlib: &ShipStdLib,
-        signatures: &ClassSignatureRegistry,
-        cls_names: &ClassNameRegistry,
+        ctx: &impl FieldResolutionCtx<'src>,
         signature: &ClassSignature,
         call: &Rc<ShipCallExpr<'src>>,
         errors: &mut Vec<AnalysisError<'src>>,
@@ -90,10 +94,10 @@ impl FieldModel {
         match &call.expr {
             ShipCallableExprAll::Cons(cls_name) => {
                 //TODO lib classes!!!
-                match cls_names.get_class(cls_name) {
+                match ctx.cls_names().get_class(cls_name) {
                     Ok(cls_id) => {
                         let own_cls_id = signature.id;
-                        if signatures.is_cls_subcls_of(stdlib, cls_id, own_cls_id).0 {
+                        if ctx.is_cls_subcls_of(cls_id, own_cls_id).0 {
                             return Self::invalid(
                                 errors,
                                 ClassId::Invalid,
@@ -121,10 +125,9 @@ impl FieldModel {
                             let arg_types: Vec<_> =
                                 args.iter().map(|model| model.field_type).collect();
 
-                            signatures
-                                .get_cls_signature(stdlib, &cls_id)
+                            ctx.get_cls_signature(&cls_id)
                                 .constructors
-                                .find_matching_cons(stdlib, &arg_types, &signatures, &call.args)
+                                .find_matching_cons(ctx, &arg_types, &call.args)
                                 .map(|(cons_id, _data)| FieldModel {
                                     field_type: cls_id,
                                     init_expr: FieldExpr::Cons {
@@ -152,18 +155,13 @@ impl FieldModel {
     }
 
     pub fn resolve<'src>(
-        stdlib: &ShipStdLib,
-        signatures: &ClassSignatureRegistry,
-        cls_names: &ClassNameRegistry,
+        ctx: &impl FieldResolutionCtx<'src>,
         signature: &ClassSignature,
-        id: FieldId,
         def: &Rc<ShipVarDef<'src>>,
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> Self {
         match &def.expr {
-            ShipExprAll::Call(call) => {
-                Self::resolve_call(stdlib, signatures, cls_names, signature, call, errors)
-            },
+            ShipExprAll::Call(call) => Self::resolve_call(ctx, signature, call, errors),
             ShipExprAll::Primary(primary) => Self::resolve_primary(primary)
                 .unwrap_or_else(|e| Self::invalid(errors, ClassId::Invalid, e)),
             expr => Self::invalid(
@@ -184,45 +182,61 @@ pub struct ClassFields {
 
 pub type ClassFieldsRegistry = ClassRegistry<ClassFields>;
 
-impl ClassFieldsRegistry {
-    pub fn get_cls_fields<'a>(
-        &'a self,
-        stdlib: &'a ShipStdLib,
-        cls_id: &ClassId,
-    ) -> &'a ClassFields {
+pub trait ClassFieldsCtx {
+    fn cls_fields(&self) -> &ClassFieldsRegistry;
+}
+impl ClassFieldsCtx for ClassFieldsRegistry {
+    fn cls_fields(&self) -> &ClassFieldsRegistry {
+        self
+    }
+}
+
+pub trait GetClsFieldsCtx: StdlibCtx + ClassFieldsCtx {
+    fn get_cls_fields(&self, cls_id: &ClassId) -> &ClassFields;
+}
+impl<Ctx: StdlibCtx + ClassFieldsCtx> GetClsFieldsCtx for Ctx {
+    fn get_cls_fields(&self, cls_id: &ClassId) -> &ClassFields {
         match cls_id {
-            ClassId::User(user_class_id) => self.get(user_class_id),
-            ClassId::Lib(lib_class_id) => stdlib.cls_fields(lib_class_id),
-            ClassId::Invalid => stdlib.invalid_fields(),
+            ClassId::User(user_class_id) => self.cls_fields().get(user_class_id),
+            ClassId::Lib(lib_class_id) => self.stdlib().cls_fields(lib_class_id),
+            ClassId::Invalid => self.stdlib().invalid_fields(),
         }
     }
+}
 
-    pub fn find_field<'a, 'src>(
-        &'a self,
-        stdlib: &'a ShipStdLib,
-        signatures: &ClassSignatureRegistry,
-        member_names: &ClassMemberNamesRegistry<'src>,
+pub trait FindFieldCtx<'src>:
+    StdlibCtx + ClassSignatureCtx + ClassMemberNamesCtx<'src> + ClassFieldsCtx
+{
+    fn find_field(
+        &self,
         cls_id: ClassId,
         field_name: &Rc<ShipId<'src>>,
-    ) -> Result<(FieldId, &'a FieldModel), FieldError<'src>> {
-        let signature = signatures.get_cls_signature(stdlib, &cls_id);
-        let members = member_names.get_member_names(stdlib, &cls_id);
-        let fields = self.get_cls_fields(stdlib, &cls_id);
+    ) -> Result<(FieldId, &FieldModel), FieldError<'src>>;
+}
+impl<'src, Ctx: StdlibCtx + ClassSignatureCtx + ClassMemberNamesCtx<'src> + ClassFieldsCtx>
+    FindFieldCtx<'src> for Ctx
+{
+    fn find_field(
+        &self,
+        cls_id: ClassId,
+        field_name: &Rc<ShipId<'src>>,
+    ) -> Result<(FieldId, &FieldModel), FieldError<'src>> {
+        let signature = self.get_cls_signature(&cls_id);
+        let members = self.get_member_names(&cls_id);
+        let fields = self.get_cls_fields(&cls_id);
 
         if let Some(field_id) = members.fields.get_by_name(field_name.id) {
             Ok((field_id, fields.registry.get(&field_id)))
         } else if cls_id == LibClassId::Class.into() {
             Err(FieldError::UndefinedFieldName { name: field_name.clone() })
         } else {
-            self.find_field(stdlib, signatures, member_names, signature.parent, field_name)
+            self.find_field(signature.parent, field_name)
         }
     }
 }
 
 pub fn init_class_fields_registry<'src>(
-    stdlib: &ShipStdLib,
-    signatures: &ClassSignatureRegistry,
-    cls_names: &ClassNameRegistry<'src>,
+    ctx: &impl FieldResolutionCtx<'src>,
     defs: &ClassDefsRegistry<'src>,
     errors: &mut Vec<AnalysisError<'src>>,
 ) -> ClassFieldsRegistry {
@@ -238,11 +252,8 @@ pub fn init_class_fields_registry<'src>(
                             (
                                 field_id,
                                 FieldModel::resolve(
-                                    stdlib,
-                                    signatures,
-                                    cls_names,
-                                    signatures.get(&cls_id),
-                                    field_id,
+                                    ctx,
+                                    ctx.signatures().get(&cls_id),
                                     field,
                                     errors,
                                 ),
