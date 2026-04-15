@@ -1,9 +1,11 @@
 use crate::analyzer::{
     AnalysisError,
     body::{ConsBodyRegistry, MethodBodyRegistry},
-    field::{ClassFields, ClassWithFieldRegistry},
-    signature::{ClassSignature, WithClassSignature},
-    stdlib::WithStd,
+    def::{ClassDefsRegistry, ClassMemberNamesRegistry},
+    field::{ClassFields, ClassFieldsRegistry},
+    registry::ClassNameRegistry,
+    signature::{ClassSignature, ClassSignatureRegistry},
+    stdlib::ShipStdLib,
 };
 
 use super::{
@@ -44,16 +46,17 @@ pub struct ClassModel {
 }
 impl ClassModel {
     pub fn new<'src>(
-        signature: ClassSignature<'src>,
+        signature: ClassSignature,
         fields: ClassFields,
         method_bodies: MethodBodyRegistry,
         cons_bodies: ConsBodyRegistry,
     ) -> Self {
-        let methods = signature.methods.take_registry().combine(method_bodies, |data, body| {
-            data.combine(body, |data, body| MethodModel::new(data.1, body))
+        let methods = signature.methods.combine(method_bodies, |data, body| {
+            data.combine(body, |signature, body| MethodModel::new(signature, body))
         });
-        let constructors =
-            signature.constructors.combine(cons_bodies, |data, body| ConsModel::new(data.1, body));
+        let constructors = signature
+            .constructors
+            .combine(cons_bodies, |signature, body| ConsModel::new(signature, body));
         Self {
             id: signature.id,
             parent: signature.parent,
@@ -67,63 +70,74 @@ pub type ClassModelRegistry = ClassRegistry<ClassModel>;
 
 impl ClassModelRegistry {
     pub fn new<'src>(
-        with_fields: WithStd<'src, ClassWithFieldRegistry<'src>>,
+        stdlib: &ShipStdLib,
+        cls_names: &ClassNameRegistry<'src>,
+        member_names: &ClassMemberNamesRegistry<'src>,
+        signatures: ClassSignatureRegistry,
+        fields: ClassFieldsRegistry,
+        defs: &ClassDefsRegistry<'src>,
         errors: &mut Vec<AnalysisError<'src>>,
-    ) -> WithStd<'src, Self> {
-        with_fields.map(|with_fields, lib| {
-            with_fields
-                .transform_with_self(
-                    |registry, cls_id, cls_data| {
-                        let cons_bodies = cls_data
-                            .class_signature()
-                            .constructors
-                            .iter()
-                            .map(|(cons_id, cons_data)| {
-                                (
-                                    cons_id,
-                                    ConsBody::resolve(
-                                        &WithStd::wrap(lib.clone(), registry),
-                                        cls_id,
-                                        cons_id,
-                                        &cons_data.0,
-                                        errors,
-                                    ),
-                                )
-                            })
-                            .collect();
+    ) -> Self {
+        let bodies = defs
+            .iter()
+            .map(|(cls_id, def)| {
+                let cons_bodies = def
+                    .constructors
+                    .iter()
+                    .map(|(cons_id, cons_def)| {
+                        (
+                            cons_id,
+                            ConsBody::resolve(
+                                stdlib,
+                                cls_names,
+                                member_names,
+                                &signatures,
+                                &fields,
+                                cls_id,
+                                cons_id,
+                                cons_def,
+                                errors,
+                            ),
+                        )
+                    })
+                    .collect();
 
-                        let method_bodies = cls_data
-                            .class_signature()
-                            .methods
-                            .iter()
-                            .map(|(method_name_id, methods)| {
-                                (
-                                    method_name_id,
-                                    methods
-                                        .iter()
-                                        .map(|(method_overload_id, method_data)| {
-                                            (
-                                                method_overload_id,
-                                                MethodBody::resolve(
-                                                    &WithStd::wrap(lib.clone(), registry),
-                                                    cls_id,
-                                                    (method_name_id, method_overload_id).into(),
-                                                    &method_data.0,
-                                                    errors,
-                                                ),
-                                            )
-                                        })
-                                        .collect(),
-                                )
-                            })
-                            .collect();
-                        (method_bodies, cons_bodies)
-                    },
-                    |(_def, signature, fields), (method_bodies, cons_bodies)| {
-                        ClassModel::new(signature, fields, method_bodies, cons_bodies)
-                    },
-                )
-                .take_registry()
-        })
+                let method_bodies = def
+                    .methods
+                    .iter()
+                    .map(|(method_name_id, methods)| {
+                        (
+                            method_name_id,
+                            methods
+                                .iter()
+                                .map(|(method_overload_id, method_def)| {
+                                    (
+                                        method_overload_id,
+                                        MethodBody::resolve(
+                                            stdlib,
+                                            cls_names,
+                                            member_names,
+                                            &signatures,
+                                            &fields,
+                                            cls_id,
+                                            (method_name_id, method_overload_id).into(),
+                                            method_def,
+                                            errors,
+                                        ),
+                                    )
+                                })
+                                .collect(),
+                        )
+                    })
+                    .collect();
+                (cls_id, (method_bodies, cons_bodies))
+            })
+            .collect();
+        signatures.combine(fields, |signature, field| (signature, field)).combine(
+            bodies,
+            |(signature, fields), (method_bodies, cons_bodies)| {
+                ClassModel::new(signature, fields, method_bodies, cons_bodies)
+            },
+        )
     }
 }

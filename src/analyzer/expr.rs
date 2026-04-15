@@ -4,10 +4,11 @@ use crate::{
     analyzer::{
         AnalysisError,
         body::{AssignTarget, BodyError, ScopeStack, ScopeVar},
-        field::{ClassWithFieldRegistry, FieldModel},
-        registry::{ClassId, ConsId, FieldId, LibClassId, MethodId, VarId},
-        signature::WithClassSignature,
-        stdlib::WithStd,
+        def::ClassMemberNamesRegistry,
+        field::{ClassFieldsRegistry, FieldModel},
+        registry::{ClassId, ClassNameRegistry, ConsId, FieldId, LibClassId, MethodId, VarId},
+        signature::ClassSignatureRegistry,
+        stdlib::ShipStdLib,
     },
     ast::{
         ShipArgs, ShipAssignableExprAll, ShipCallExpr, ShipCallableExprAll, ShipExprAll, ShipId,
@@ -49,7 +50,11 @@ pub struct ExprModel {
 
 impl ExprModel {
     pub fn resolve_callable<'src>(
-        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
+        stdlib: &ShipStdLib,
+        cls_names: &ClassNameRegistry<'src>,
+        member_names: &ClassMemberNamesRegistry<'src>,
+        signatures: &ClassSignatureRegistry,
+        fields: &ClassFieldsRegistry,
         call: &Rc<ShipCallExpr<'src>>,
         ctx: &ScopeStack<'src>,
         errors: &mut Vec<AnalysisError<'src>>,
@@ -59,12 +64,22 @@ impl ExprModel {
              method_name: &Rc<ShipId<'src>>,
              method_args: &Rc<ShipArgs<'src>>,
              errors: &mut Vec<AnalysisError<'src>>| {
-                let args = ExprModel::resolve_args(registry, ctx, method_args, errors);
+                let args = ExprModel::resolve_args(
+                    stdlib,
+                    cls_names,
+                    member_names,
+                    signatures,
+                    fields,
+                    ctx,
+                    method_args,
+                    errors,
+                );
                 let arg_types: Vec<_> = args.iter().map(|arg| arg.expr_type).collect();
 
-                registry
-                    .registry()
+                signatures
                     .find_matching_method(
+                        stdlib,
+                        member_names,
                         object_type,
                         method_name.id,
                         &arg_types,
@@ -86,15 +101,22 @@ impl ExprModel {
             |cls_id: ClassId,
              cons_args: &Rc<ShipArgs<'src>>,
              errors: &mut Vec<AnalysisError<'src>>| {
-                let args = ExprModel::resolve_args(registry, ctx, cons_args, errors);
+                let args = ExprModel::resolve_args(
+                    stdlib,
+                    cls_names,
+                    member_names,
+                    signatures,
+                    fields,
+                    ctx,
+                    cons_args,
+                    errors,
+                );
                 let arg_types: Vec<_> = args.iter().map(|arg| arg.expr_type).collect();
 
-                registry
-                    .registry()
-                    .get_cls_signature(&cls_id)
-                    .class_signature()
+                signatures
+                    .get_cls_signature(stdlib, &cls_id)
                     .constructors
-                    .find_matching_cons(&arg_types, &registry.registry(), cons_args)
+                    .find_matching_cons(stdlib, &arg_types, &signatures, cons_args)
                     .map(|(cons_id, _cons_data)| {
                         (cls_id, CallExpr::Cons { class: ctx.curr_cls.into(), cons: cons_id, args })
                     })
@@ -106,7 +128,16 @@ impl ExprModel {
 
         match &call.expr {
             ShipCallableExprAll::MemberAccess(member_access) => {
-                let expr = ExprModel::resolve(registry, ctx, &member_access.expr, errors);
+                let expr = ExprModel::resolve(
+                    stdlib,
+                    cls_names,
+                    member_names,
+                    signatures,
+                    fields,
+                    ctx,
+                    &member_access.expr,
+                    errors,
+                );
                 resolve_method_call(expr.expr_type, &member_access.member_id, &call.args, errors)
             },
             ShipCallableExprAll::This(_) => {
@@ -114,7 +145,7 @@ impl ExprModel {
                 (Some(cls_id), expr)
             },
             ShipCallableExprAll::Cons(id_node) => {
-                if let Ok(cls_id) = registry.get_class(id_node) {
+                if let Ok(cls_id) = cls_names.get_class(id_node) {
                     let (cls_id, expr) = resolve_cons_call(cls_id, &call.args, errors);
                     (Some(cls_id), expr)
                 } else {
@@ -125,7 +156,11 @@ impl ExprModel {
         }
     }
     pub fn resolve_assignable<'src>(
-        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
+        stdlib: &ShipStdLib,
+        cls_names: &ClassNameRegistry<'src>,
+        member_names: &ClassMemberNamesRegistry<'src>,
+        signatures: &ClassSignatureRegistry,
+        fields: &ClassFieldsRegistry,
         target: &ShipAssignableExprAll<'src>,
         ctx: &ScopeStack<'src>,
         value_type: ClassId,
@@ -135,9 +170,9 @@ impl ExprModel {
         let resolve_field_assign = |field_id: FieldId,
                                     field_model: &FieldModel,
                                     target_object: ExprModel| {
-            if !registry.registry().is_cls_subcls_of(value_type, field_model.field_type).0 {
+            if !signatures.is_cls_subcls_of(stdlib, value_type, field_model.field_type).0 {
                 Err(BodyError::TypeMismatch { expr: value_node.clone() })
-            } else if !registry.registry().is_cls_subcls_of(ctx.curr_cls, target_object.expr_type).0
+            } else if !signatures.is_cls_subcls_of(stdlib, ctx.curr_cls, target_object.expr_type).0
             {
                 Err(BodyError::AssignToExternalField { assign: target.clone() })
             } else {
@@ -147,11 +182,23 @@ impl ExprModel {
 
         match &target {
             ShipAssignableExprAll::MemberAccess(member_access) => {
-                let target_object = ExprModel::resolve(registry, ctx, &member_access.expr, errors);
-                match registry
-                    .registry()
-                    .find_field(target_object.expr_type, &member_access.member_id)
-                {
+                let target_object = ExprModel::resolve(
+                    stdlib,
+                    cls_names,
+                    member_names,
+                    signatures,
+                    fields,
+                    ctx,
+                    &member_access.expr,
+                    errors,
+                );
+                match fields.find_field(
+                    stdlib,
+                    signatures,
+                    member_names,
+                    target_object.expr_type,
+                    &member_access.member_id,
+                ) {
                     Ok((field_id, field_model)) => {
                         resolve_field_assign(field_id, field_model, target_object).unwrap_or_else(
                             |e| {
@@ -166,48 +213,71 @@ impl ExprModel {
                     },
                 }
             },
-            ShipAssignableExprAll::Variable(var_name) => match ctx
-                .find_var(&registry.registry(), var_name)
-            {
-                Some(ScopeVar::Var(var_id, var_signature)) => {
-                    if !registry.registry().is_cls_subcls_of(value_type, var_signature.var_type).0 {
-                        errors.push(BodyError::TypeMismatch { expr: value_node.clone() }.into());
+            ShipAssignableExprAll::Variable(var_name) => {
+                match ctx.find_var(stdlib, member_names, signatures, fields, var_name) {
+                    Some(ScopeVar::Var(var_id, var_signature)) => {
+                        if !signatures
+                            .is_cls_subcls_of(stdlib, value_type, var_signature.var_type)
+                            .0
+                        {
+                            errors
+                                .push(BodyError::TypeMismatch { expr: value_node.clone() }.into());
+                            AssignTarget::Invalid
+                        } else if !var_signature.mutable {
+                            errors.push(BodyError::AssignToConst { assign: target.clone() }.into());
+                            AssignTarget::Invalid
+                        } else {
+                            AssignTarget::Var(var_id)
+                        }
+                    },
+                    Some(ScopeVar::Field(field_id, field_model)) => resolve_field_assign(
+                        field_id,
+                        field_model,
+                        ExprModel { expr_type: ctx.curr_cls.into(), expr: Expr::This },
+                    )
+                    .unwrap_or_else(|e| {
+                        errors.push(e.into());
                         AssignTarget::Invalid
-                    } else if !var_signature.mutable {
-                        errors.push(BodyError::AssignToConst { assign: target.clone() }.into());
+                    }),
+                    Some(ScopeVar::Global) => todo!(),
+                    None => {
+                        errors.push(BodyError::UndefinedVariable { name: var_name.clone() }.into());
                         AssignTarget::Invalid
-                    } else {
-                        AssignTarget::Var(var_id)
-                    }
-                },
-                Some(ScopeVar::Field(field_id, field_model)) => resolve_field_assign(
-                    field_id,
-                    field_model,
-                    ExprModel { expr_type: ctx.curr_cls.into(), expr: Expr::This },
-                )
-                .unwrap_or_else(|e| {
-                    errors.push(e.into());
-                    AssignTarget::Invalid
-                }),
-                Some(ScopeVar::Global) => todo!(),
-                None => {
-                    errors.push(BodyError::UndefinedVariable { name: var_name.clone() }.into());
-                    AssignTarget::Invalid
-                },
+                    },
+                }
             },
         }
     }
 
     pub fn resolve<'src>(
-        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
+        stdlib: &ShipStdLib,
+        cls_names: &ClassNameRegistry<'src>,
+        member_names: &ClassMemberNamesRegistry<'src>,
+        signatures: &ClassSignatureRegistry,
+        fields: &ClassFieldsRegistry,
         ctx: &ScopeStack<'src>,
         expr: &ShipExprAll<'src>,
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> Self {
         match expr {
             ShipExprAll::MemberAccess(member_access) => {
-                let expr = ExprModel::resolve(registry, ctx, &member_access.expr, errors);
-                match registry.registry().find_field(expr.expr_type, &member_access.member_id) {
+                let expr = ExprModel::resolve(
+                    stdlib,
+                    cls_names,
+                    member_names,
+                    signatures,
+                    fields,
+                    ctx,
+                    &member_access.expr,
+                    errors,
+                );
+                match fields.find_field(
+                    stdlib,
+                    signatures,
+                    member_names,
+                    expr.expr_type,
+                    &member_access.member_id,
+                ) {
                     Ok((field_id, field_model)) => Self {
                         expr_type: field_model.field_type,
                         expr: Expr::FieldRead { expr: expr.into(), field: field_id },
@@ -219,7 +289,16 @@ impl ExprModel {
                 }
             },
             ShipExprAll::Call(call) => {
-                let (return_type, call_expr) = Self::resolve_callable(registry, call, ctx, errors);
+                let (return_type, call_expr) = Self::resolve_callable(
+                    stdlib,
+                    cls_names,
+                    member_names,
+                    signatures,
+                    fields,
+                    call,
+                    ctx,
+                    errors,
+                );
                 match return_type {
                     Some(return_type) => {
                         Self { expr_type: return_type, expr: Expr::Call(call_expr) }
@@ -252,23 +331,30 @@ impl ExprModel {
                 ShipPrimaryAll::This(_node) => {
                     Self { expr_type: ctx.curr_cls.into(), expr: Expr::This }
                 },
-                ShipPrimaryAll::Id(id_node) => match ctx.find_var(&registry.registry(), id_node) {
-                    Some(ScopeVar::Var(var_id, var_signature)) => {
-                        Self { expr_type: var_signature.var_type, expr: Expr::Varaible(var_id) }
-                    },
-                    Some(ScopeVar::Field(field_id, field_model)) => Self {
-                        expr_type: field_model.field_type,
-                        expr: Expr::FieldRead {
-                            expr: ExprModel { expr_type: ctx.curr_cls.into(), expr: Expr::This }
-                                .into(),
-                            field: field_id,
+                ShipPrimaryAll::Id(id_node) => {
+                    match ctx.find_var(stdlib, member_names, signatures, fields, id_node) {
+                        Some(ScopeVar::Var(var_id, var_signature)) => {
+                            Self { expr_type: var_signature.var_type, expr: Expr::Varaible(var_id) }
                         },
-                    },
-                    Some(ScopeVar::Global) => todo!(),
-                    None => {
-                        errors.push(BodyError::UndefinedVariable { name: id_node.clone() }.into());
-                        Self { expr_type: ClassId::Invalid, expr: Expr::Invalid }
-                    },
+                        Some(ScopeVar::Field(field_id, field_model)) => Self {
+                            expr_type: field_model.field_type,
+                            expr: Expr::FieldRead {
+                                expr: ExprModel {
+                                    expr_type: ctx.curr_cls.into(),
+                                    expr: Expr::This,
+                                }
+                                .into(),
+                                field: field_id,
+                            },
+                        },
+                        Some(ScopeVar::Global) => todo!(),
+                        None => {
+                            errors.push(
+                                BodyError::UndefinedVariable { name: id_node.clone() }.into(),
+                            );
+                            Self { expr_type: ClassId::Invalid, expr: Expr::Invalid }
+                        },
+                    }
                 },
             },
             ShipExprAll::ClassCast(node) => todo!(),
@@ -276,11 +362,29 @@ impl ExprModel {
     }
 
     pub fn resolve_args<'src>(
-        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
+        stdlib: &ShipStdLib,
+        cls_names: &ClassNameRegistry<'src>,
+        member_names: &ClassMemberNamesRegistry<'src>,
+        signatures: &ClassSignatureRegistry,
+        fields: &ClassFieldsRegistry,
         ctx: &ScopeStack<'src>,
         args: &Rc<ShipArgs<'src>>,
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> Vec<ExprModel> {
-        args.exprs.iter().map(|expr| Self::resolve(registry, ctx, expr, errors)).collect()
+        args.exprs
+            .iter()
+            .map(|expr| {
+                Self::resolve(
+                    stdlib,
+                    cls_names,
+                    member_names,
+                    signatures,
+                    fields,
+                    ctx,
+                    expr,
+                    errors,
+                )
+            })
+            .collect()
     }
 }

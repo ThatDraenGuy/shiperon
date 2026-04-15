@@ -1,10 +1,10 @@
 pub mod body;
+pub mod def;
 pub mod expr;
 pub mod field;
 pub mod model;
 pub mod registry;
 pub mod signature;
-pub mod stages;
 pub mod stdlib;
 
 use std::rc::Rc;
@@ -12,18 +12,19 @@ use std::rc::Rc;
 use crate::{
     analyzer::{
         body::BodyError,
-        field::{ClassWithFieldRegistry, FieldError},
+        def::init_cls_registry,
+        field::{FieldError, init_class_fields_registry},
         model::ClassModelRegistry,
-        signature::{ConsError, MethodError},
-        stdlib::{StdLibRegistry, WithStd, stdlib},
+        signature::{ConsError, MethodError, init_cls_signature_registry},
+        stdlib::ShipStdLib,
     },
     ast::{ShipId, ShipProgram},
-    diagnostics::{Diagnostic, ErrorLevel, Reason, Renderable},
+    diagnostics::{Diagnostic, ErrorLevel, Renderable},
     parser::WithParserLoc,
 };
 
 use derive_more::{Display, From};
-use signature::{ClassDefRegistry, ClassError, ClassSignatureRegistry};
+use signature::ClassError;
 
 pub struct Analyzer<'src> {
     ast: Rc<ShipProgram<'src>>,
@@ -33,18 +34,23 @@ impl<'src> Analyzer<'src> {
     pub fn new(ast: Rc<ShipProgram<'src>>) -> Self {
         Self { ast }
     }
-    pub fn analyze(
-        &mut self,
-        lib: Rc<StdLibRegistry>,
-    ) -> (WithStd<ClassModelRegistry>, Vec<Diagnostic<'src>>) {
+    pub fn analyze(&mut self, stdlib: &ShipStdLib) -> (ClassModelRegistry, Vec<Diagnostic<'src>>) {
         let mut errors = Vec::new();
 
-        let class_defs = ClassDefRegistry::new(&self.ast.classes, &mut errors);
-        let class_signatures = ClassSignatureRegistry::new(class_defs, false, &mut errors);
-        let checked_signatures = class_signatures.check_inheritance(&mut errors);
-        let with_fields =
-            ClassWithFieldRegistry::new(WithStd::wrap(lib, checked_signatures), &mut errors);
-        let result = ClassModelRegistry::new(with_fields, &mut errors);
+        let (cls_names, member_names, defs) = init_cls_registry(&self.ast.classes, &mut errors);
+        let cls_signatures = init_cls_signature_registry(&cls_names, &defs, &mut errors);
+        let cls_fields =
+            init_class_fields_registry(stdlib, &cls_signatures, &cls_names, &defs, &mut errors);
+
+        let result = ClassModelRegistry::new(
+            stdlib,
+            &cls_names,
+            &member_names,
+            cls_signatures,
+            cls_fields,
+            &defs,
+            &mut errors,
+        );
         (result, errors.into_iter().map(|e| e.into()).collect())
     }
 }

@@ -5,14 +5,15 @@ use derive_more::Display;
 use crate::{
     analyzer::{
         AnalysisError,
+        def::ClassMemberNamesRegistry,
         expr::{CallExpr, Expr, ExprModel},
-        field::{ClassWithFieldRegistry, FieldModel, WithClassFields},
+        field::{ClassFieldsRegistry, FieldModel},
         registry::{
-            ClassId, ClassRegistry, ConsId, ConsRegistry, FieldId, LibClassId, MethodId,
+            ClassId, ClassNameRegistry, ConsId, ConsRegistry, FieldId, LibClassId, MethodId,
             MethodRegistry, UserClassId, VarId, VarNameRegistryBuilder,
         },
-        signature::{WithClassSignature, WithMethodSignature},
-        stdlib::WithStd,
+        signature::ClassSignatureRegistry,
+        stdlib::ShipStdLib,
     },
     ast::*,
     diagnostics::Renderable,
@@ -91,17 +92,22 @@ impl<'src> ScopeStack<'src> {
         self.inner.front_mut().unwrap()
     }
 
-    pub fn find_var<'a, V: WithClassSignature<'src> + WithClassFields>(
+    pub fn find_var<'a>(
         &'a self,
-        registry: &'a WithStd<'src, &ClassRegistry<V>>,
+        stdlib: &'a ShipStdLib,
+        member_names: &ClassMemberNamesRegistry<'src>,
+        signatures: &ClassSignatureRegistry,
+        fields: &'a ClassFieldsRegistry,
         name: &Rc<ShipId<'src>>,
     ) -> Option<ScopeVar<'a>> {
         for scope in &self.inner {
-            if let Some(id) = scope.vars.curr().get_by_name(name.id) {
-                return Some(ScopeVar::Var(id, scope.vars.curr().get(&id)));
+            if let Some(id) = scope.vars.names().get_by_name(name.id) {
+                return Some(ScopeVar::Var(id, scope.vars.values().get(&id)));
             }
         }
-        if let Ok((field_id, field_model)) = registry.find_field(self.curr_cls.into(), name) {
+        if let Ok((field_id, field_model)) =
+            fields.find_field(stdlib, signatures, member_names, self.curr_cls.into(), name)
+        {
             return Some(ScopeVar::Field(field_id, field_model));
         }
         None
@@ -114,7 +120,11 @@ pub struct Body {
 }
 impl Body {
     fn resolve<'src>(
-        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
+        stdlib: &ShipStdLib,
+        cls_names: &ClassNameRegistry<'src>,
+        member_names: &ClassMemberNamesRegistry<'src>,
+        signatures: &ClassSignatureRegistry,
+        fields: &ClassFieldsRegistry,
         scopes: &mut ScopeStack<'src>,
         body: &Rc<ShipBody<'src>>,
         errors: &mut Vec<AnalysisError<'src>>,
@@ -128,7 +138,16 @@ impl Body {
             } else {
                 stmts.push(match member {
                     ShipBodyMemberAll::VarDef(var_def) => {
-                        let init_expr = ExprModel::resolve(registry, scopes, &var_def.expr, errors);
+                        let init_expr = ExprModel::resolve(
+                            stdlib,
+                            cls_names,
+                            member_names,
+                            signatures,
+                            fields,
+                            scopes,
+                            &var_def.expr,
+                            errors,
+                        );
                         let id = scopes.curr_mut().vars.update(var_def.var_id.id, |_maybe_old| {
                             VarSignature { var_type: init_expr.expr_type, mutable: true } //variable shadowing
                         });
@@ -136,9 +155,22 @@ impl Body {
                     },
                     ShipBodyMemberAll::Stmt(stmt) => match stmt {
                         ShipStmtAll::Assign(assign) => {
-                            let value = ExprModel::resolve(registry, scopes, &assign.value, errors);
+                            let value = ExprModel::resolve(
+                                stdlib,
+                                cls_names,
+                                member_names,
+                                signatures,
+                                fields,
+                                scopes,
+                                &assign.value,
+                                errors,
+                            );
                             let target = ExprModel::resolve_assignable(
-                                registry,
+                                stdlib,
+                                cls_names,
+                                member_names,
+                                signatures,
+                                fields,
                                 &assign.target,
                                 scopes,
                                 value.expr_type,
@@ -148,8 +180,16 @@ impl Body {
                             Stmt::Assign(target, value)
                         },
                         ShipStmtAll::While(while_node) => {
-                            let condition =
-                                ExprModel::resolve(registry, scopes, &while_node.condition, errors);
+                            let condition = ExprModel::resolve(
+                                stdlib,
+                                cls_names,
+                                member_names,
+                                signatures,
+                                fields,
+                                scopes,
+                                &while_node.condition,
+                                errors,
+                            );
                             if condition.expr_type != LibClassId::Boolean.into() {
                                 errors.push(
                                     BodyError::NonBoolCondition {
@@ -159,13 +199,30 @@ impl Body {
                                 );
                             }
                             scopes.enter(ScopeType::While);
-                            let body = Self::resolve(registry, scopes, &while_node.body, errors);
+                            let body = Self::resolve(
+                                stdlib,
+                                cls_names,
+                                member_names,
+                                signatures,
+                                fields,
+                                scopes,
+                                &while_node.body,
+                                errors,
+                            );
                             scopes.exit();
                             Stmt::While { condition, body }
                         },
                         ShipStmtAll::If(if_node) => {
-                            let condition =
-                                ExprModel::resolve(registry, scopes, &if_node.condition, errors);
+                            let condition = ExprModel::resolve(
+                                stdlib,
+                                cls_names,
+                                member_names,
+                                signatures,
+                                fields,
+                                scopes,
+                                &if_node.condition,
+                                errors,
+                            );
                             if condition.expr_type != LibClassId::Boolean.into() {
                                 errors.push(
                                     BodyError::NonBoolCondition {
@@ -175,12 +232,29 @@ impl Body {
                                 );
                             }
                             scopes.enter(ScopeType::If);
-                            let then_body =
-                                Self::resolve(registry, scopes, &if_node.then_body, errors);
+                            let then_body = Self::resolve(
+                                stdlib,
+                                cls_names,
+                                member_names,
+                                signatures,
+                                fields,
+                                scopes,
+                                &if_node.then_body,
+                                errors,
+                            );
                             scopes.exit();
                             let else_body = if_node.else_body.as_ref().map(|else_body_node| {
                                 scopes.enter(ScopeType::If);
-                                let res = Self::resolve(registry, scopes, else_body_node, errors);
+                                let res = Self::resolve(
+                                    stdlib,
+                                    cls_names,
+                                    member_names,
+                                    signatures,
+                                    fields,
+                                    scopes,
+                                    else_body_node,
+                                    errors,
+                                );
                                 scopes.exit();
                                 res
                             });
@@ -195,8 +269,16 @@ impl Body {
                             Stmt::If { condition, then_body, else_body }
                         },
                         ShipStmtAll::Call(call_node) => {
-                            let call_expr =
-                                ExprModel::resolve_callable(registry, call_node, scopes, errors);
+                            let call_expr = ExprModel::resolve_callable(
+                                stdlib,
+                                cls_names,
+                                member_names,
+                                signatures,
+                                fields,
+                                call_node,
+                                scopes,
+                                errors,
+                            );
                             Stmt::Call(call_expr.1)
                         },
                         ShipStmtAll::Return(return_stmt) => {
@@ -209,14 +291,21 @@ impl Body {
                                             (None, None) => BodyReturn::Void,
                                             (Some(expected_type), Some(return_expr)) => {
                                                 let expr = ExprModel::resolve(
-                                                    registry,
+                                                    stdlib,
+                                                    cls_names,
+                                                    member_names,
+                                                    signatures,
+                                                    fields,
                                                     scopes,
                                                     return_expr,
                                                     errors,
                                                 );
-                                                if registry
-                                                    .registry()
-                                                    .is_cls_subcls_of(expr.expr_type, expected_type)
+                                                if signatures
+                                                    .is_cls_subcls_of(
+                                                        stdlib,
+                                                        expr.expr_type,
+                                                        expected_type,
+                                                    )
                                                     .0
                                                 {
                                                     BodyReturn::Value(expr)
@@ -303,13 +392,17 @@ pub struct ConsBody {
 
 impl ConsBody {
     pub fn resolve<'src>(
-        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
+        stdlib: &ShipStdLib,
+        cls_names: &ClassNameRegistry<'src>,
+        member_names: &ClassMemberNamesRegistry<'src>,
+        signatures: &ClassSignatureRegistry,
+        fields: &ClassFieldsRegistry,
         cls_id: UserClassId,
         cons_id: ConsId,
         def: &Rc<ShipConsDef<'src>>,
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> Self {
-        let signature = &registry.get(&cls_id).class_signature().constructors.get(&cons_id).1;
+        let signature = signatures.get(&cls_id).constructors.get(&cons_id);
 
         let params = signature.annotate_types(def.params.params.iter());
         let mut param_registry = VarSignatureRegistry::default();
@@ -323,7 +416,16 @@ impl ConsBody {
 
         let mut scopes = ScopeStack::new_cons(cls_id, cons_id, param_registry);
         let body = match &def.body {
-            ShipConsBodyAll::Body(body) => Body::resolve(registry, &mut scopes, body, errors),
+            ShipConsBodyAll::Body(body) => Body::resolve(
+                stdlib,
+                cls_names,
+                member_names,
+                signatures,
+                fields,
+                &mut scopes,
+                body,
+                errors,
+            ),
             ShipConsBodyAll::Generated(node) => todo!(),
         };
         Self { body }
@@ -338,19 +440,17 @@ pub struct MethodBody {
 
 impl MethodBody {
     pub fn resolve<'src>(
-        registry: &WithStd<'src, &ClassWithFieldRegistry<'src>>,
+        stdlib: &ShipStdLib,
+        cls_names: &ClassNameRegistry<'src>,
+        member_names: &ClassMemberNamesRegistry<'src>,
+        signatures: &ClassSignatureRegistry,
+        fields: &ClassFieldsRegistry,
         cls_id: UserClassId,
         method_id: MethodId,
         def: &Rc<ShipMethodDef<'src>>,
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> Self {
-        let signature = registry
-            .get(&cls_id)
-            .class_signature()
-            .methods
-            .registry()
-            .get_method(&method_id)
-            .method_signature();
+        let signature = signatures.get(&cls_id).methods.get_method(&method_id);
 
         let params = signature.params.annotate_types(def.params.params.iter());
         let mut param_registry = VarSignatureRegistry::default();
@@ -366,12 +466,28 @@ impl MethodBody {
             ScopeStack::new_method(cls_id, method_id, param_registry, signature.return_type);
         let body = match &def.body {
             Some(ShipMethodBodyAll::Expr(expr)) => {
-                let expr_model = ExprModel::resolve(registry, &scopes, expr, errors);
+                let expr_model = ExprModel::resolve(
+                    stdlib,
+                    cls_names,
+                    member_names,
+                    signatures,
+                    fields,
+                    &scopes,
+                    expr,
+                    errors,
+                );
                 Body { stmts: vec![], return_expr: Some(BodyReturn::Value(expr_model)) }
             },
-            Some(ShipMethodBodyAll::Body(body)) => {
-                Body::resolve(registry, &mut scopes, body, errors)
-            },
+            Some(ShipMethodBodyAll::Body(body)) => Body::resolve(
+                stdlib,
+                cls_names,
+                member_names,
+                signatures,
+                fields,
+                &mut scopes,
+                body,
+                errors,
+            ),
             Some(ShipMethodBodyAll::Generated(generated)) => todo!(),
             None => todo!(),
         };
