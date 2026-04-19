@@ -5,11 +5,11 @@ pub mod field;
 pub mod model;
 pub mod registry;
 pub mod signature;
-pub mod stdlib;
 
 use std::rc::Rc;
 
 use crate::{
+    ShipStdLib, StdlibCtx,
     analyzer::{
         body::BodyError,
         def::{ClassMemberNamesCtx, ClassMemberNamesRegistry, ClassNamesCtx, init_cls_registry},
@@ -20,7 +20,6 @@ use crate::{
             ClassSignatureCtx, ClassSignatureRegistry, ConsError, MethodError,
             init_cls_signature_registry,
         },
-        stdlib::{ShipStdLib, StdlibCtx},
     },
     ast::{ShipId, ShipProgram},
     diagnostics::{Diagnostic, ErrorLevel, Renderable},

@@ -153,7 +153,13 @@ impl<Id: RegistryId, V> Registry<Id, V> {
 }
 impl<Id: RegistryId, V1, V2> Registry<Id, (V1, V2)> {
     pub fn split(self) -> (Registry<Id, V1>, Registry<Id, V2>) {
-        todo!()
+        let mut registry0 = Registry::default();
+        let mut registry1 = Registry::default();
+        for (id, value) in self.into_iter() {
+            registry0.insert(id, value.0);
+            registry1.insert(id, value.1);
+        }
+        (registry0, registry1)
     }
 }
 
@@ -364,21 +370,6 @@ mod class {
         List,
         String,
         Char,
-    }
-
-    impl InnerRegistryId for LibClassId {
-        #[inline]
-        fn as_index(&self) -> usize {
-            todo!()
-        }
-
-        #[inline]
-        fn from_index(idx: usize) -> Self {
-            todo!()
-        }
-    }
-    impl HasProvider for LibClassId {
-        type Provider = SimpleIdProvider<LibClassId>;
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

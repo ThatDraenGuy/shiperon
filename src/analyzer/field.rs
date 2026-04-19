@@ -12,11 +12,11 @@ use crate::{
             LibClassId,
         },
         signature::{ClassSignature, ClassSignatureCtx, GetClsSignatureCtx},
-        stdlib::StdlibCtx,
     },
     ast::{ShipCallExpr, ShipCallableExprAll, ShipExprAll, ShipId, ShipPrimaryAll, ShipVarDef},
     diagnostics::Renderable,
     parser::WithParserLoc,
+    stdlib::StdlibCtx,
 };
 
 pub enum FieldExpr {
@@ -227,7 +227,7 @@ impl<'src, Ctx: StdlibCtx + ClassSignatureCtx + ClassMemberNamesCtx<'src> + Clas
 
         if let Some(field_id) = members.fields.get_by_name(field_name.id) {
             Ok((field_id, fields.registry.get(&field_id)))
-        } else if cls_id == LibClassId::Class.into() {
+        } else if cls_id == LibClassId::Class.into() || cls_id == ClassId::Invalid {
             Err(FieldError::UndefinedFieldName { name: field_name.clone() })
         } else {
             self.find_field(signature.parent, field_name)

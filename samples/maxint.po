@@ -1,6 +1,4 @@
 class Program is
-    method MaxInt(a: IntArray) : Integer
-
     this() is
         var arr : IntArray(5)
         arr.set(0, 0)
@@ -8,7 +6,7 @@ class Program is
         arr.set(2, 2)
         arr.set(3, 3)
         arr.set(4, 4)
-        return MaxInt(arr)
+        MaxInt(arr)
     end
 
     method MaxInt(a: IntArray) : Integer is

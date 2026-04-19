@@ -1,4 +1,5 @@
 use crate::{
+    StdlibCtx,
     analyzer::{
         AnalysisError, GeneralError,
         registry::{
@@ -8,7 +9,6 @@ use crate::{
             RegistryBuilder, UserClassId,
         },
         signature::ClassError,
-        stdlib::StdlibCtx,
     },
     ast::{ShipClassDef, ShipClassMemberAll, ShipConsDef, ShipId, ShipMethodDef, ShipVarDef},
 };

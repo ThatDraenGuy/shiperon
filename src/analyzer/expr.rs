@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
+    StdlibCtx,
     analyzer::{
         AnalysisError,
         body::{AssignTarget, BodyError, ScopeStack, ScopeVar},
@@ -8,7 +9,6 @@ use crate::{
         field::{ClassFieldsCtx, FieldModel, FindFieldCtx},
         registry::{ClassId, ConsId, FieldId, LibClassId, MethodId, VarId},
         signature::{ClassSignatureCtx, FindMatchingMethodCtx, GetClsSignatureCtx},
-        stdlib::StdlibCtx,
     },
     ast::{
         ShipArgs, ShipAssignableExprAll, ShipCallExpr, ShipCallableExprAll, ShipExprAll, ShipId,

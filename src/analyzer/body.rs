@@ -3,6 +3,7 @@ use std::{collections::LinkedList, rc::Rc};
 use derive_more::Display;
 
 use crate::{
+    StdlibCtx,
     analyzer::{
         AnalysisError,
         def::{ClassMemberNamesCtx, ClassNamesCtx},
@@ -13,7 +14,6 @@ use crate::{
             UserClassId, VarId, VarNameRegistryBuilder,
         },
         signature::{ClassSignatureCtx, GetClsSignatureCtx},
-        stdlib::StdlibCtx,
     },
     ast::*,
     diagnostics::Renderable,
@@ -389,7 +389,10 @@ impl MethodBody {
             },
             Some(ShipMethodBodyAll::Body(body)) => Body::resolve(ctx, &mut scopes, body, errors),
             Some(ShipMethodBodyAll::Generated(generated)) => todo!(),
-            None => todo!(),
+            None => {
+                //skip for now - forward declaration not handled
+                Body { stmts: vec![], return_expr: None }
+            },
         };
         Self { body }
     }

@@ -5,9 +5,9 @@ use std::rc::Rc;
 use derive_more::Display;
 use itertools::Itertools;
 
+use crate::StdlibCtx;
 use crate::analyzer::AnalysisError;
 use crate::analyzer::def::{ClassDefsRegistry, ClassMemberNamesCtx, GetMemberNamesCtx};
-use crate::analyzer::stdlib::StdlibCtx;
 use crate::ast::{
     ShipArgs, ShipClassDef, ShipConsDef, ShipId, ShipMethodDef, ShipParams, ShipVarDef,
 };
@@ -21,6 +21,9 @@ pub struct ParamsSignature {
 impl ParamsSignature {
     pub fn new(param_types: Vec<ClassId>) -> Self {
         Self { param_types }
+    }
+    pub fn empty() -> Self {
+        Self { param_types: vec![] }
     }
 
     pub fn matches<'src>(
