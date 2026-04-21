@@ -280,10 +280,10 @@ impl<'src> Renderable<'src> for FieldError<'src> {
     fn render(&self, _src: &impl crate::ByteSource<'src>) -> String {
         match self {
             FieldError::InvalidInitExpr { expr: _ } => {
-                format!("Only constructors & primitive allowed in field initializers")
+                "Only constructors & primitive allowed in field initializers".to_string()
             },
             FieldError::RecursiveInitExpr { call: _ } => {
-                format!("Recursive field initializer expressiondetected")
+                "Recursive field initializer expression detected".to_string()
             },
             FieldError::UndefinedFieldName { name } => {
                 format!("Field with name `{}` was not found", name.id)

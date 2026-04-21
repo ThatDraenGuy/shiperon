@@ -338,7 +338,7 @@ impl ConsBody {
         let params = signature.annotate_types(def.params.params.iter());
         let mut param_registry = VarSignatureRegistry::default();
         for (param_def, param_type) in params {
-            if let Some((old, new)) = param_registry
+            if let Some((_old, _new)) = param_registry
                 .insert(param_def.name.id, VarSignature { var_type: param_type, mutable: true })
             {
                 errors.push(BodyError::DuplicateParam { snd: param_def.clone() }.into());
@@ -348,7 +348,7 @@ impl ConsBody {
         let mut scopes = ScopeStack::new_cons(cls_id, cons_id, param_registry);
         let body = match &def.body {
             ShipConsBodyAll::Body(body) => Body::resolve(ctx, &mut scopes, body, errors),
-            ShipConsBodyAll::Generated(node) => todo!(),
+            ShipConsBodyAll::Generated(_generated) => unreachable!(),
         };
         Self { body }
     }
@@ -373,7 +373,7 @@ impl MethodBody {
         let params = signature.params.annotate_types(def.params.params.iter());
         let mut param_registry = VarSignatureRegistry::default();
         for (param_def, param_type) in params {
-            if let Some((old, new)) = param_registry
+            if let Some((_old, _new)) = param_registry
                 .insert(param_def.name.id, VarSignature { var_type: param_type, mutable: true })
             {
                 errors.push(BodyError::DuplicateParam { snd: param_def.clone() }.into());
@@ -388,7 +388,7 @@ impl MethodBody {
                 Body { stmts: vec![], return_expr: Some(BodyReturn::Value(expr_model)) }
             },
             Some(ShipMethodBodyAll::Body(body)) => Body::resolve(ctx, &mut scopes, body, errors),
-            Some(ShipMethodBodyAll::Generated(generated)) => todo!(),
+            Some(ShipMethodBodyAll::Generated(_generated)) => unreachable!(),
             None => {
                 //skip for now - forward declaration not handled
                 Body { stmts: vec![], return_expr: None }
@@ -424,35 +424,37 @@ pub enum BodyError<'src> {
     InvalidVoidReturningCall { call: Rc<ShipCallExpr<'src>> },
     #[display("duplicate param")]
     DuplicateParam { snd: Rc<ShipParam<'src>> },
+    #[display("invalid class cast")]
+    InvalidClassCast { cast: Rc<ShipClassCastExpr<'src>> },
 }
 impl<'src> Renderable<'src> for BodyError<'src> {
     fn render(&self, _src: &impl crate::ByteSource<'src>) -> String {
         match self {
             BodyError::ReturnInCons { return_stmt: _ } => {
-                format!("Return statement not allowed in a constructor")
+                "Return statement not allowed in a constructor".to_string()
             },
             BodyError::UndefinedVariable { name } => {
                 format!("Variable with name `{}` was not found", name.id)
             },
             BodyError::AssignToConst { assign: _ } => {
-                format!("Assign into a constant variable attempted")
+                "Assign into a constant variable attempted".to_string()
             },
             BodyError::AssignToExternalField { assign: _ } => {
-                format!("Fields of foreign classes are read-only")
+                "Fields of foreign classes are read-only".to_string()
             },
-            BodyError::TypeMismatch { expr: _ } => format!("Type mismatch"),
+            BodyError::TypeMismatch { expr: _ } => "Type mismatch".to_string(),
             BodyError::NonBoolCondition { condition: _ } => {
-                format!("Condition expression is nota boolean")
+                "Condition expression is nota boolean".to_string()
             },
             BodyError::ReturnValueInVoid { return_stmt: _ } => {
-                format!("Return statement with value is not allowed in a void method")
+                "Return statement with value is not allowed in a void method".to_string()
             },
             BodyError::VoidReturnInValued { return_stmt: _ } => {
-                format!("Return statement without value is not allowed in a non-void method")
+                "Return statement without value is not allowed in a non-void method".to_string()
             },
-            BodyError::UnreachableStmts { stmts: _ } => format!("Dead code"),
+            BodyError::UnreachableStmts { stmts: _ } => "Dead code".to_string(),
             BodyError::InvalidVoidReturningCall { call: _ } => {
-                format!("Attempted to use return value of a void method")
+                "Attempted to use return value of a void method".to_string()
             },
             BodyError::DuplicateParam { snd } => format!(
                 "Param with name `{}` is defined multiple times:\nSecond declaration is:\n{}\n{}",
@@ -460,6 +462,9 @@ impl<'src> Renderable<'src> for BodyError<'src> {
                 snd.start,
                 snd.src()
             ),
+            BodyError::InvalidClassCast { cast: _cast } => {
+                "Inner expression type is not a child of cast class".to_string()
+            },
         }
     }
 }
@@ -479,6 +484,7 @@ impl<'src> WithParserLoc for BodyError<'src> {
             },
             BodyError::InvalidVoidReturningCall { call } => call.loc(),
             BodyError::DuplicateParam { snd } => snd.loc(),
+            BodyError::InvalidClassCast { cast } => cast.loc(),
         }
     }
 }

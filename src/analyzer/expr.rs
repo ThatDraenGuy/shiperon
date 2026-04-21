@@ -35,6 +35,7 @@ pub enum Expr {
     Call(CallExpr),
     Primitive(PrimitiveExpr),
     This,
+    ClassCast { expr: Box<ExprModel>, cls_id: ClassId },
     Invalid,
 }
 impl From<PrimitiveExpr> for Expr {
@@ -135,7 +136,7 @@ impl ExprModel {
                     resolve_method_call(scopes.curr_cls.into(), id_node, &call.args, errors)
                 }
             },
-            ShipCallableExprAll::Super(_node) => todo!(),
+            ShipCallableExprAll::Super(_node) => unimplemented!(),
         }
     }
     pub fn resolve_assignable<'src>(
@@ -196,7 +197,10 @@ impl ExprModel {
                     errors.push(e.into());
                     AssignTarget::Invalid
                 }),
-                Some(ScopeVar::Global) => todo!(),
+                Some(ScopeVar::Global) => {
+                    errors.push(BodyError::AssignToConst { assign: target.clone() }.into());
+                    AssignTarget::Invalid
+                },
                 None => {
                     errors.push(BodyError::UndefinedVariable { name: var_name.clone() }.into());
                     AssignTarget::Invalid
@@ -271,14 +275,26 @@ impl ExprModel {
                             field: field_id,
                         },
                     },
-                    Some(ScopeVar::Global) => todo!(),
+                    Some(ScopeVar::Global) => unimplemented!(),
                     None => {
                         errors.push(BodyError::UndefinedVariable { name: id_node.clone() }.into());
                         Self { expr_type: ClassId::Invalid, expr: Expr::Invalid }
                     },
                 },
             },
-            ShipExprAll::ClassCast(_node) => todo!(),
+            ShipExprAll::ClassCast(class_cast) => {
+                let inner = ExprModel::resolve(ctx, scopes, &class_cast.expr, errors);
+                let cast_cls = ctx.cls_names().get_class_with_err(&class_cast.class_id, errors);
+                if !ctx.is_cls_subcls_of(cast_cls, inner.expr_type).0 {
+                    errors.push(BodyError::InvalidClassCast { cast: class_cast.clone() }.into());
+                    Self { expr_type: ClassId::Invalid, expr: Expr::Invalid }
+                } else {
+                    Self {
+                        expr_type: cast_cls,
+                        expr: Expr::ClassCast { expr: inner.into(), cls_id: cast_cls },
+                    }
+                }
+            },
         }
     }
 

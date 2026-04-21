@@ -97,10 +97,6 @@ impl<Id: RegistryId, V> Registry<Id, V> {
         self.inner[idx] = Some(value);
     }
     #[inline]
-    fn get_mut(&mut self, id: &Id) -> &mut V {
-        self.inner.get_mut(id.as_index()).and_then(Option::as_mut).unwrap()
-    }
-    #[inline]
     fn replace<F>(&mut self, id: &Id, f: F)
     where
         F: FnOnce(Option<V>) -> V,

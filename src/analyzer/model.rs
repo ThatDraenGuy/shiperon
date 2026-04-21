@@ -43,18 +43,16 @@ pub struct ClassModel {
     pub fields: FieldModelRegistry,
 }
 impl ClassModel {
-    pub fn new<'src>(
+    pub fn new(
         signature: ClassSignature,
         fields: ClassFields,
         method_bodies: MethodBodyRegistry,
         cons_bodies: ConsBodyRegistry,
     ) -> Self {
-        let methods = signature.methods.combine(method_bodies, |data, body| {
-            data.combine(body, |signature, body| MethodModel::new(signature, body))
-        });
-        let constructors = signature
-            .constructors
-            .combine(cons_bodies, |signature, body| ConsModel::new(signature, body));
+        let methods = signature
+            .methods
+            .combine(method_bodies, |data, body| data.combine(body, MethodModel::new));
+        let constructors = signature.constructors.combine(cons_bodies, ConsModel::new);
         Self {
             id: signature.id,
             parent: signature.parent,

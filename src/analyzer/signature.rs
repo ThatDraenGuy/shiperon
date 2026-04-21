@@ -26,11 +26,7 @@ impl ParamsSignature {
         Self { param_types: vec![] }
     }
 
-    pub fn matches<'src>(
-        &self,
-        ctx: &impl GetClsSignatureCtx,
-        arg_types: &[ClassId],
-    ) -> (bool, u8) {
+    pub fn matches(&self, ctx: &impl GetClsSignatureCtx, arg_types: &[ClassId]) -> (bool, u8) {
         if arg_types.len() != self.param_types.len() {
             (false, 0)
         } else {
@@ -79,7 +75,7 @@ impl<'src> Renderable<'src> for ConsError<'src> {
     fn render(&self, _src: &impl crate::ByteSource<'src>) -> String {
         match self {
             ConsError::NoMatchingCons { args: _ } => {
-                format!("No constructor overload matching argument types was found")
+                "No constructor overload matching argument types was found".to_string()
             },
         }
     }
@@ -111,7 +107,7 @@ impl<'src> Renderable<'src> for MethodError<'src> {
                 format!("Method with name `{}` was not found", name.id)
             },
             MethodError::NoOverload { args: _ } => {
-                format!("No overload matching argument types found")
+                "No overload matching argument types found".to_string()
             },
         }
     }
