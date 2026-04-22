@@ -202,7 +202,7 @@ ast: |-
                                           ],
                                       ),
                                   ),
-                                  body: (
+                                  body: Body((
                                       raw_loc: "100..162",
                                       start: "Ln 5, Col 34",
                                       end: "Ln 8, Col 8",
@@ -293,7 +293,7 @@ ast: |-
                                               ))),
                                           ],
                                       ),
-                                  ),
+                                  )),
                               ),
                           )),
                           MethodDef((
@@ -1959,7 +1959,7 @@ ast: |-
                                           ],
                                       ),
                                   ),
-                                  body: (
+                                  body: Body((
                                       raw_loc: "994..1056",
                                       start: "Ln 37, Col 34",
                                       end: "Ln 40, Col 8",
@@ -2050,7 +2050,7 @@ ast: |-
                                               ))),
                                           ],
                                       ),
-                                  ),
+                                  )),
                               ),
                           )),
                           MethodDef((
@@ -2530,7 +2530,7 @@ ast: |-
                                           ],
                                       ),
                                   ),
-                                  body: (
+                                  body: Body((
                                       raw_loc: "1275..1337",
                                       start: "Ln 48, Col 34",
                                       end: "Ln 51, Col 8",
@@ -2621,7 +2621,7 @@ ast: |-
                                               ))),
                                           ],
                                       ),
-                                  ),
+                                  )),
                               ),
                           )),
                           MethodDef((
@@ -3153,7 +3153,7 @@ ast: |-
                                           ],
                                       ),
                                   ),
-                                  body: (
+                                  body: Body((
                                       raw_loc: "1538..1973",
                                       start: "Ln 59, Col 37",
                                       end: "Ln 73, Col 8",
@@ -3872,7 +3872,7 @@ ast: |-
                                               ))),
                                           ],
                                       ),
-                                  ),
+                                  )),
                               ),
                           )),
                       ],

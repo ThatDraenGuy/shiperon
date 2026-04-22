@@ -96,7 +96,7 @@ ast: |-
                                           params: [],
                                       ),
                                   ),
-                                  body: (
+                                  body: Body((
                                       raw_loc: "054..088",
                                       start: "Ln 4, Col 12",
                                       end: "Ln 6, Col 8",
@@ -146,7 +146,7 @@ ast: |-
                                               ))),
                                           ],
                                       ),
-                                  ),
+                                  )),
                               ),
                           )),
                       ],
@@ -211,7 +211,7 @@ ast: |-
                                           params: [],
                                       ),
                                   ),
-                                  body: (
+                                  body: Body((
                                       raw_loc: "157..232",
                                       start: "Ln 13, Col 12",
                                       end: "Ln 16, Col 8",
@@ -297,7 +297,7 @@ ast: |-
                                               ))),
                                           ],
                                       ),
-                                  ),
+                                  )),
                               ),
                           )),
                       ],

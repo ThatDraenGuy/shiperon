@@ -106,7 +106,7 @@ ast: |-
                                           params: [],
                                       ),
                                   ),
-                                  body: (
+                                  body: Body((
                                       raw_loc: "070..247",
                                       start: "Ln 4, Col 12",
                                       end: "Ln 12, Col 8",
@@ -522,7 +522,7 @@ ast: |-
                                               ))),
                                           ],
                                       ),
-                                  ),
+                                  )),
                               ),
                           )),
                           MethodDef((
