@@ -43,7 +43,7 @@ ast: |-
                                           params: [],
                                       ),
                                   ),
-                                  body: (
+                                  body: Body((
                                       raw_loc: "025..129",
                                       start: "Ln 2, Col 12",
                                       end: "Ln 7, Col 8",
@@ -156,7 +156,7 @@ ast: |-
                                               )),
                                           ],
                                       ),
-                                  ),
+                                  )),
                               ),
                           )),
                       ],

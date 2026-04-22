@@ -1,24 +1,35 @@
 class Base is
+    this() is
+    end
 end
 
 class Derived extends Base is
+    this() is
+    end
 end
 
 class DoublyDerived extends Derived is
+    this() is
+    end
 end
 
 class NotDerived is
+    this() is
+    end
 end
 
 class Program is
+    this() is
+    end
+
     method IncorrectReturn(): Boolean => 1
     method IncorrectReturn2(): Integer is
-        return true
+        return Base()
     end
     method IncorrectReturn3() is
         return 1.0
     end
-    method IncorrectReturn4(): real is
+    method IncorrectReturn4(): Real is
         return
     end
 
@@ -32,7 +43,7 @@ class Program is
     end
 
     this() is
-        IntOnly(true) // incorrect argument type
+        IntOnly(Base()) // incorrect argument type
 
         TakeBase(Base()) // ok
         TakeBase(Derived()) // ok

@@ -1,4 +1,4 @@
-use std::{fmt::Display, rc::Rc};
+use std::{fmt::Display, marker::PhantomData, rc::Rc};
 
 use serde::Serialize;
 
@@ -88,12 +88,14 @@ pub type ShipParams<'src> = Node<'src, ParamsData<'src>>;
 pub enum ShipMethodBodyAll<'src> {
     Body(Rc<ShipBody<'src>>),
     Expr(ShipExprAll<'src>),
+    Generated(Rc<ShipGenerated<'src>>),
 }
 impl<'src> WithParserLoc for ShipMethodBodyAll<'src> {
     fn loc(&self) -> crate::parser::ParserLoc {
         match self {
             ShipMethodBodyAll::Body(node) => node.loc(),
             ShipMethodBodyAll::Expr(ship_expr_all) => ship_expr_all.loc(),
+            ShipMethodBodyAll::Generated(generated) => generated.loc(),
         }
     }
 }
@@ -103,6 +105,30 @@ impl<'src> Display for ShipMethodBodyAll<'src> {
         match self {
             ShipMethodBodyAll::Body(node) => node.fmt(f),
             ShipMethodBodyAll::Expr(expr) => expr.fmt(f),
+            ShipMethodBodyAll::Generated(generated) => generated.fmt(f),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub enum ShipConsBodyAll<'src> {
+    Body(Rc<ShipBody<'src>>),
+    Generated(Rc<ShipGenerated<'src>>),
+}
+impl<'src> WithParserLoc for ShipConsBodyAll<'src> {
+    fn loc(&self) -> crate::parser::ParserLoc {
+        match self {
+            ShipConsBodyAll::Body(node) => node.loc(),
+            ShipConsBodyAll::Generated(generated) => generated.loc(),
+        }
+    }
+}
+
+impl<'src> Display for ShipConsBodyAll<'src> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ShipConsBodyAll::Body(node) => node.fmt(f),
+            ShipConsBodyAll::Generated(generated) => generated.fmt(f),
         }
     }
 }
@@ -110,7 +136,7 @@ impl<'src> Display for ShipMethodBodyAll<'src> {
 #[derive(Debug, Clone, Serialize)]
 pub struct ConsDefData<'src> {
     pub params: Rc<ShipParams<'src>>,
-    pub body: Rc<ShipBody<'src>>,
+    pub body: ShipConsBodyAll<'src>,
 }
 impl<'src> NodeData for ConsDefData<'src> {
     fn name() -> &'static str {
@@ -147,6 +173,14 @@ pub enum ShipBodyMemberAll<'src> {
     VarDef(Rc<ShipVarDef<'src>>),
     Stmt(ShipStmtAll<'src>),
 }
+impl<'src> WithParserLoc for ShipBodyMemberAll<'src> {
+    fn loc(&self) -> crate::parser::ParserLoc {
+        match self {
+            ShipBodyMemberAll::VarDef(node) => node.loc(),
+            ShipBodyMemberAll::Stmt(stmt) => stmt.loc(),
+        }
+    }
+}
 
 impl<'src> Display for ShipBodyMemberAll<'src> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -163,7 +197,18 @@ pub enum ShipStmtAll<'src> {
     While(Rc<ShipWhileStmt<'src>>),
     If(Rc<ShipIfStmt<'src>>),
     Return(Rc<ShipReturnStmt<'src>>),
-    MethodCall(Rc<ShipMethodCallExpr<'src>>),
+    Call(Rc<ShipCallExpr<'src>>),
+}
+impl<'src> WithParserLoc for ShipStmtAll<'src> {
+    fn loc(&self) -> crate::parser::ParserLoc {
+        match self {
+            ShipStmtAll::Assign(node) => node.loc(),
+            ShipStmtAll::While(node) => node.loc(),
+            ShipStmtAll::If(node) => node.loc(),
+            ShipStmtAll::Return(node) => node.loc(),
+            ShipStmtAll::Call(node) => node.loc(),
+        }
+    }
 }
 
 impl<'src> Display for ShipStmtAll<'src> {
@@ -173,7 +218,7 @@ impl<'src> Display for ShipStmtAll<'src> {
             ShipStmtAll::While(node) => node.fmt(f),
             ShipStmtAll::If(node) => node.fmt(f),
             ShipStmtAll::Return(node) => node.fmt(f),
-            ShipStmtAll::MethodCall(node) => node.fmt(f),
+            ShipStmtAll::Call(node) => node.fmt(f),
         }
     }
 }
@@ -229,7 +274,7 @@ pub type ShipReturnStmt<'src> = Node<'src, ReturnStmtData<'src>>;
 #[derive(Debug, Clone, Serialize)]
 pub enum ShipExprAll<'src> {
     MemberAccess(Rc<ShipMemberAccessExpr<'src>>),
-    MethodCall(Rc<ShipMethodCallExpr<'src>>),
+    Call(Rc<ShipCallExpr<'src>>),
     Primary(ShipPrimaryAll<'src>),
     ClassCast(Rc<ShipClassCastExpr<'src>>),
 }
@@ -237,7 +282,7 @@ impl<'src> WithParserLoc for ShipExprAll<'src> {
     fn loc(&self) -> crate::parser::ParserLoc {
         match self {
             ShipExprAll::MemberAccess(node) => node.loc(),
-            ShipExprAll::MethodCall(node) => node.loc(),
+            ShipExprAll::Call(node) => node.loc(),
             ShipExprAll::Primary(primary) => primary.loc(),
             ShipExprAll::ClassCast(node) => node.loc(),
         }
@@ -248,7 +293,7 @@ impl<'src> Display for ShipExprAll<'src> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ShipExprAll::MemberAccess(node) => node.fmt(f),
-            ShipExprAll::MethodCall(node) => node.fmt(f),
+            ShipExprAll::Call(node) => node.fmt(f),
             ShipExprAll::Primary(primary) => primary.fmt(f),
             ShipExprAll::ClassCast(node) => node.fmt(f),
         }
@@ -330,16 +375,16 @@ impl<'src> NodeData for MemberAccessExprData<'src> {
 pub type ShipMemberAccessExpr<'src> = Node<'src, MemberAccessExprData<'src>>;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct MethodCallExprData<'src> {
+pub struct CallExprData<'src> {
     pub expr: ShipCallableExprAll<'src>,
     pub args: Rc<ShipArgs<'src>>,
 }
-impl<'src> NodeData for MethodCallExprData<'src> {
+impl<'src> NodeData for CallExprData<'src> {
     fn name() -> &'static str {
         "MethodCall"
     }
 }
-pub type ShipMethodCallExpr<'src> = Node<'src, MethodCallExprData<'src>>;
+pub type ShipCallExpr<'src> = Node<'src, CallExprData<'src>>;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ArgsData<'src> {
@@ -450,12 +495,23 @@ impl NodeData for SuperData {
 pub type ShipSuper<'src> = Node<'src, SuperData>;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct IdData {
-    pub id: String,
+pub struct IdData<'src> {
+    pub id: &'src str,
 }
-impl NodeData for IdData {
+impl<'src> NodeData for IdData<'src> {
     fn name() -> &'static str {
         "Id"
     }
 }
-pub type ShipId<'src> = Node<'src, IdData>;
+pub type ShipId<'src> = Node<'src, IdData<'src>>;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GeneratedData<'src> {
+    pub phantom: PhantomData<&'src str>,
+}
+impl<'src> NodeData for GeneratedData<'src> {
+    fn name() -> &'static str {
+        "Generated"
+    }
+}
+pub type ShipGenerated<'src> = Node<'src, GeneratedData<'src>>;

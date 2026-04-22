@@ -1,5 +1,6 @@
 use std::{
     fmt::{Debug, Display},
+    ops::Deref,
     rc::Rc,
 };
 
@@ -50,10 +51,22 @@ pub struct Node<'src, N: NodeData> {
     pub data: N,
 }
 
+impl<'src, N: NodeData> Deref for Node<'src, N> {
+    type Target = N;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
 impl<'src, N: NodeData> Node<'src, N> {
     pub fn new<S: ByteSource<'src>>(data: N, loc: ParserLoc, src: &S) -> Rc<Self> {
         let (start, end) = src.resolve(loc);
         Rc::new(Node { raw_loc: loc, start, end, src: src.source(loc), data })
+    }
+
+    pub fn src(&self) -> &'src str {
+        str::from_utf8(self.src).unwrap_or("invalid utf-8 string")
     }
 }
 

@@ -55,6 +55,10 @@ impl<'src> ByteSource<'src> for StrSource<'src> {
     fn resolve(&self, loc: ParserLoc) -> (NodeLoc, NodeLoc) {
         (self.get_from_pos(loc.begin as usize), self.get_from_pos(loc.end as usize))
     }
+
+    fn source_str(&self, loc: ParserLoc) -> &'src str {
+        str::from_utf8(self.source(loc)).unwrap_or("Invalid utf-8 string")
+    }
 }
 
 impl<'src> ByteSourceIter for Peekable<Bytes<'src>> {

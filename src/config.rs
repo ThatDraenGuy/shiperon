@@ -4,6 +4,7 @@ use serde::Deserialize;
 pub struct CompilerConfig {
     pub debug: bool,
     pub features: FeatureFlags,
+    pub internal: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -24,6 +25,7 @@ impl CompilerConfig {
                 io: false,
                 super_kw: false,
             },
+            internal: false,
         }
     }
 
@@ -31,9 +33,13 @@ impl CompilerConfig {
         Self {
             debug: false,
             features: FeatureFlags { class_casting: true, string: true, io: true, super_kw: true },
+            internal: false,
         }
     }
 
+    pub fn internal() -> Self {
+        Self { internal: true, ..Self::all_features() }
+    }
     pub fn with_debug(self) -> Self {
         Self { debug: true, ..self }
     }

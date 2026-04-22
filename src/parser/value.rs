@@ -1,18 +1,11 @@
-use std::rc::Rc;
+use std::{marker::PhantomData, rc::Rc};
 
 use crate::{
     ByteSource,
     ast::*,
-    diagnostics::Diagnostic,
     lexer::{Token, TokenValue},
     parser::ParserLoc,
 };
-
-pub struct ParseData<'src, S: ByteSource<'src>> {
-    pub program: Option<Rc<ShipProgram<'src>>>,
-    pub diagnostics: Vec<Diagnostic<'src>>,
-    pub src: S,
-}
 
 #[derive(Clone, Debug, Default)]
 pub enum ParserValue<'src> {
@@ -31,7 +24,7 @@ pub enum ParserValue<'src> {
     Primary(ShipPrimaryAll<'src>),
     ArgsBuilder(Vec<ShipExprAll<'src>>),
     Args(Rc<ShipArgs<'src>>),
-    MethodCallExpr(Rc<ShipMethodCallExpr<'src>>),
+    CallExpr(Rc<ShipCallExpr<'src>>),
     MemberAccessExpr(Rc<ShipMemberAccessExpr<'src>>),
     ClassCastExpr(Rc<ShipClassCastExpr<'src>>),
     AssignableExpr(ShipAssignableExprAll<'src>),
@@ -57,6 +50,7 @@ pub enum ParserValue<'src> {
     ClassDef(Rc<ShipClassDef<'src>>),
     ClassDefsBuilder(Vec<Rc<ShipClassDef<'src>>>),
     Program(Rc<ShipProgram<'src>>),
+    Generated(Rc<ShipGenerated<'src>>),
 }
 
 impl Token {
@@ -167,10 +161,10 @@ impl<'src> ShipArgs<'src> {
     }
 }
 
-impl<'src> ShipMethodCallExpr<'src> {
+impl<'src> ShipCallExpr<'src> {
     pub fn from(value: ParserValue<'src>) -> Rc<Self> {
         match value {
-            ParserValue::MethodCallExpr(n) => n,
+            ParserValue::CallExpr(n) => n,
             other => unreachable!("expected MethodCallExpr, got {:?}", other),
         }
     }
@@ -347,6 +341,15 @@ impl<'src> ShipProgram<'src> {
     }
 }
 
+impl<'src> ShipGenerated<'src> {
+    pub fn from(value: ParserValue<'src>) -> Rc<Self> {
+        match value {
+            ParserValue::Generated(n) => n,
+            other => unreachable!("expected Generated, got {:?}", other),
+        }
+    }
+}
+
 #[allow(non_snake_case)]
 pub mod ArgsBuilder {
     use super::ParserValue;
@@ -432,9 +435,19 @@ impl<'src> ParserValue<'src> {
         matches!(self, Self::Uninitialized)
     }
 
+    pub fn new_generated(src: &impl ByteSource<'src>, token: Token) -> Self {
+        Self::Generated(ShipGenerated::new(GeneratedData { phantom: PhantomData }, token.loc, src))
+    }
+
     pub fn new_id(src: &impl ByteSource<'src>, token: Token) -> Self {
         match token.token_value {
-            TokenValue::String(id) => Self::Id(ShipId::new(IdData { id }, token.loc, src)),
+            TokenValue::String(_id) => Self::Id(ShipId::new(
+                IdData {
+                    id: str::from_utf8(src.source(token.loc)).unwrap_or("non utf-8 fragment"),
+                },
+                token.loc,
+                src,
+            )),
             other => unreachable!("expected String, got {:?}", other),
         }
     }
@@ -523,7 +536,7 @@ impl<'src> ParserValue<'src> {
         expr: ShipCallableExprAll<'src>,
         args: Rc<ShipArgs<'src>>,
     ) -> Self {
-        Self::MethodCallExpr(ShipMethodCallExpr::new(MethodCallExprData { expr, args }, loc, src))
+        Self::CallExpr(ShipCallExpr::new(CallExprData { expr, args }, loc, src))
     }
 
     pub fn new_assignable_expr(
@@ -654,7 +667,7 @@ impl<'src> ParserValue<'src> {
         src: &impl ByteSource<'src>,
         loc: ParserLoc,
         params: Rc<ShipParams<'src>>,
-        body: Rc<ShipBody<'src>>,
+        body: ShipConsBodyAll<'src>,
     ) -> Self {
         Self::ConsDef(ShipConsDef::new(ConsDefData { params, body }, loc, src))
     }
