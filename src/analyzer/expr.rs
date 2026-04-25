@@ -25,13 +25,13 @@ pub enum PrimitiveExpr {
 
 pub enum CallExpr {
     Cons { class: ClassId, cons: ConsId, args: Vec<ExprModel> },
-    Method { class: ClassId, method: MethodId, args: Vec<ExprModel> },
+    Method { object: Box<ExprModel>, class: ClassId, method: MethodId, args: Vec<ExprModel> },
     Invalid,
 }
 
 pub enum Expr {
-    Varaible(VarId),
-    FieldRead { expr: Box<ExprModel>, field: FieldId },
+    Variable(VarId, usize),
+    FieldRead { expr: Box<ExprModel>, owner_cls: ClassId, field: FieldId },
     Call(CallExpr),
     Primitive(PrimitiveExpr),
     This,
@@ -72,7 +72,7 @@ impl ExprModel {
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> (Option<ClassId>, CallExpr) {
         let resolve_method_call =
-            |object_type: ClassId,
+            |object: ExprModel,
              method_name: &Rc<ShipId<'src>>,
              method_args: &Rc<ShipArgs<'src>>,
              errors: &mut Vec<AnalysisError<'src>>| {
@@ -80,16 +80,22 @@ impl ExprModel {
                 let arg_types: Vec<_> = args.iter().map(|arg| arg.expr_type).collect();
 
                 ctx.find_matching_method(
-                    object_type,
+                    object.expr_type,
                     method_name.id,
                     &arg_types,
                     method_name,
                     method_args,
                 )
                 .map(|(cls_id, method_id, signature)| {
+                    let (cls_id, method_id) = ctx.get_top_method(cls_id, method_id);
                     (
                         signature.return_type,
-                        CallExpr::Method { class: cls_id, method: method_id, args },
+                        CallExpr::Method {
+                            object: object.into(),
+                            class: cls_id,
+                            method: method_id,
+                            args,
+                        },
                     )
                 })
                 .unwrap_or_else(|e| {
@@ -122,7 +128,7 @@ impl ExprModel {
         match &call.expr {
             ShipCallableExprAll::MemberAccess(member_access) => {
                 let expr = ExprModel::resolve(ctx, scopes, &member_access.expr, errors);
-                resolve_method_call(expr.expr_type, &member_access.member_id, &call.args, errors)
+                resolve_method_call(expr, &member_access.member_id, &call.args, errors)
             },
             ShipCallableExprAll::This(_) => {
                 let (cls_id, expr) = resolve_cons_call(scopes.curr_cls.into(), &call.args, errors);
@@ -133,7 +139,12 @@ impl ExprModel {
                     let (cls_id, expr) = resolve_cons_call(cls_id, &call.args, errors);
                     (Some(cls_id), expr)
                 } else {
-                    resolve_method_call(scopes.curr_cls.into(), id_node, &call.args, errors)
+                    resolve_method_call(
+                        ExprModel { expr_type: scopes.curr_cls.into(), expr: Expr::This },
+                        id_node,
+                        &call.args,
+                        errors,
+                    )
                 }
             },
             ShipCallableExprAll::Super(_node) => unimplemented!(),
@@ -147,28 +158,29 @@ impl ExprModel {
         value_node: &ShipExprAll<'src>,
         errors: &mut Vec<AnalysisError<'src>>,
     ) -> AssignTarget {
-        let resolve_field_assign =
-            |field_id: FieldId, field_model: &FieldModel, target_object: ExprModel| {
-                if !ctx.is_cls_subcls_of(value_type, field_model.field_type).0 {
-                    Err(BodyError::TypeMismatch { expr: value_node.clone() })
-                } else if !ctx.is_cls_subcls_of(scopes.curr_cls, target_object.expr_type).0 {
-                    Err(BodyError::AssignToExternalField { assign: target.clone() })
-                } else {
-                    Ok(AssignTarget::Field(target_object, field_id))
-                }
-            };
+        let resolve_field_assign = |cls_id: ClassId,
+                                    field_id: FieldId,
+                                    field_model: &FieldModel,
+                                    target_object: ExprModel| {
+            if !ctx.is_cls_subcls_of(value_type, field_model.field_type).0 {
+                Err(BodyError::TypeMismatch { expr: value_node.clone() })
+            } else if !ctx.is_cls_subcls_of(scopes.curr_cls, target_object.expr_type).0 {
+                Err(BodyError::AssignToExternalField { assign: target.clone() })
+            } else {
+                Ok(AssignTarget::Field(target_object, cls_id, field_id))
+            }
+        };
 
         match &target {
             ShipAssignableExprAll::MemberAccess(member_access) => {
                 let target_object = ExprModel::resolve(ctx, scopes, &member_access.expr, errors);
                 match ctx.find_field(target_object.expr_type, &member_access.member_id) {
-                    Ok((field_id, field_model)) => {
-                        resolve_field_assign(field_id, field_model, target_object).unwrap_or_else(
-                            |e| {
+                    Ok((cls_id, field_id, field_model)) => {
+                        resolve_field_assign(cls_id, field_id, field_model, target_object)
+                            .unwrap_or_else(|e| {
                                 errors.push(e.into());
                                 AssignTarget::Invalid
-                            },
-                        )
+                            })
                     },
                     Err(e) => {
                         errors.push(e.into());
@@ -177,7 +189,7 @@ impl ExprModel {
                 }
             },
             ShipAssignableExprAll::Variable(var_name) => match scopes.find_var(ctx, var_name) {
-                Some(ScopeVar::Var(var_id, var_signature)) => {
+                Some(ScopeVar::Var(var_id, offset, var_signature)) => {
                     if !ctx.is_cls_subcls_of(value_type, var_signature.var_type).0 {
                         errors.push(BodyError::TypeMismatch { expr: value_node.clone() }.into());
                         AssignTarget::Invalid
@@ -185,10 +197,11 @@ impl ExprModel {
                         errors.push(BodyError::AssignToConst { assign: target.clone() }.into());
                         AssignTarget::Invalid
                     } else {
-                        AssignTarget::Var(var_id)
+                        AssignTarget::Var(var_id, offset)
                     }
                 },
-                Some(ScopeVar::Field(field_id, field_model)) => resolve_field_assign(
+                Some(ScopeVar::Field(cls_id, field_id, field_model)) => resolve_field_assign(
+                    cls_id,
                     field_id,
                     field_model,
                     ExprModel { expr_type: scopes.curr_cls.into(), expr: Expr::This },
@@ -219,9 +232,13 @@ impl ExprModel {
             ShipExprAll::MemberAccess(member_access) => {
                 let expr = ExprModel::resolve(ctx, scopes, &member_access.expr, errors);
                 match ctx.find_field(expr.expr_type, &member_access.member_id) {
-                    Ok((field_id, field_model)) => Self {
+                    Ok((cls_id, field_id, field_model)) => Self {
                         expr_type: field_model.field_type,
-                        expr: Expr::FieldRead { expr: expr.into(), field: field_id },
+                        expr: Expr::FieldRead {
+                            expr: expr.into(),
+                            owner_cls: cls_id,
+                            field: field_id,
+                        },
                     },
                     Err(e) => {
                         errors.push(e.into());
@@ -264,14 +281,16 @@ impl ExprModel {
                     Self { expr_type: scopes.curr_cls.into(), expr: Expr::This }
                 },
                 ShipPrimaryAll::Id(id_node) => match scopes.find_var(ctx, id_node) {
-                    Some(ScopeVar::Var(var_id, var_signature)) => {
-                        Self { expr_type: var_signature.var_type, expr: Expr::Varaible(var_id) }
+                    Some(ScopeVar::Var(var_id, offset, var_signature)) => Self {
+                        expr_type: var_signature.var_type,
+                        expr: Expr::Variable(var_id, offset),
                     },
-                    Some(ScopeVar::Field(field_id, field_model)) => Self {
+                    Some(ScopeVar::Field(cls_id, field_id, field_model)) => Self {
                         expr_type: field_model.field_type,
                         expr: Expr::FieldRead {
                             expr: ExprModel { expr_type: scopes.curr_cls.into(), expr: Expr::This }
                                 .into(),
+                            owner_cls: cls_id,
                             field: field_id,
                         },
                     },

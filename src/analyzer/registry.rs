@@ -135,16 +135,17 @@ impl<Id: RegistryId, V> Registry<Id, V> {
     where
         F: Fn(V, V2) -> V3,
     {
-        let t = self
-            .inner
-            .into_iter()
-            .zip(other.inner)
-            .map(|(v, v2)| match (v, v2) {
-                (Some(a), Some(b)) => Some(f(a, b)),
-                _ => None,
-            })
-            .collect();
-        Registry { inner: t, phantom: PhantomData }
+        self.into_iter().zip(other.into_iter()).map(|((id, v), (_id, v2))| (id, f(v, v2))).collect()
+        // let t = self
+        //     .inner
+        //     .into_iter()
+        //     .zip(other.inner)
+        //     .map(|(v, v2)| match (v, v2) {
+        //         (Some(a), Some(b)) => Some(f(a, b)),
+        //         _ => None,
+        //     })
+        //     .collect();
+        // Registry { inner: t, phantom: PhantomData }
     }
 }
 impl<Id: RegistryId, V1, V2> Registry<Id, (V1, V2)> {
@@ -454,7 +455,7 @@ mod method {
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct MethodId(MethodNameId, MethodOverloadId);
+    pub struct MethodId(pub MethodNameId, pub MethodOverloadId);
     impl From<(MethodNameId, MethodOverloadId)> for MethodId {
         fn from(value: (MethodNameId, MethodOverloadId)) -> Self {
             Self(value.0, value.1)
@@ -530,6 +531,8 @@ mod field {
 pub use field::*;
 
 mod variable {
+    use std::fmt::Display;
+
     use super::{
         HasProvider, InnerRegistryId, NameRegistry, NameRegistryBuilder, Registry, RegistryBuilder,
         SimpleIdProvider,
@@ -550,6 +553,11 @@ mod variable {
     }
     impl HasProvider for VarId {
         type Provider = SimpleIdProvider<VarId>;
+    }
+    impl Display for VarId {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_fmt(format_args!("Var{}", self.0))
+        }
     }
     pub type VarNameRegistry<'key> = NameRegistry<'key, VarId>;
     pub type VarNameRegistryBuilder<'key, V> = NameRegistryBuilder<'key, VarId, V>;

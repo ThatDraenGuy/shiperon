@@ -1,22 +1,27 @@
 use super::registry::*;
 use std::collections::HashMap;
+use std::marker::PhantomData;
+use std::ops::Deref;
 use std::rc::Rc;
 
 use derive_more::Display;
 use itertools::Itertools;
 
-use crate::StdlibCtx;
 use crate::analyzer::AnalysisError;
-use crate::analyzer::def::{ClassDefsRegistry, ClassMemberNamesCtx, GetMemberNamesCtx};
+use crate::analyzer::def::{
+    ClassDefsRegistry, ClassMemberNamesCtx, ClassMemberNamesRegistry, ClassNamesCtx,
+    GetMemberNamesCtx,
+};
 use crate::ast::{
     ShipArgs, ShipClassDef, ShipConsDef, ShipId, ShipMethodDef, ShipParams, ShipVarDef,
 };
 use crate::diagnostics::Renderable;
 use crate::parser::{ParserLoc, WithParserLoc};
+use crate::{ShipStdLib, StdlibCtx};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParamsSignature {
-    param_types: Vec<ClassId>,
+    pub param_types: Vec<ClassId>,
 }
 impl ParamsSignature {
     pub fn new(param_types: Vec<ClassId>) -> Self {
@@ -91,6 +96,7 @@ impl<'src> WithParserLoc for ConsError<'src> {
 pub struct MethodSignature {
     pub params: ParamsSignature,
     pub return_type: Option<ClassId>,
+    pub overriding: Option<(ClassId, MethodId)>, //top ClassId
 }
 
 #[derive(Debug, Clone, Display)]
@@ -158,6 +164,7 @@ pub trait GetClsSignatureCtx: StdlibCtx + ClassSignatureCtx {
         child: C,
         parent: P,
     ) -> (bool, u8);
+    fn get_top_method(&self, cls: ClassId, method: MethodId) -> (ClassId, MethodId);
 }
 impl<Ctx: StdlibCtx + ClassSignatureCtx> GetClsSignatureCtx for Ctx {
     fn get_cls_signature(&self, cls_id: &ClassId) -> &ClassSignature {
@@ -186,6 +193,13 @@ impl<Ctx: StdlibCtx + ClassSignatureCtx> GetClsSignatureCtx for Ctx {
             let signature = self.get_cls_signature(&current);
             current = signature.parent;
             diff += 1;
+        }
+    }
+
+    fn get_top_method(&self, cls: ClassId, method: MethodId) -> (ClassId, MethodId) {
+        match self.get_cls_signature(&cls).methods.get_method(&method).overriding {
+            Some((cls, method)) => self.get_top_method(cls, method),
+            None => (cls, method),
         }
     }
 }
@@ -274,11 +288,14 @@ fn resolve_method_signature<'src>(
     let params = resolve_params_signature(names, &method_node.params, errors);
     let return_type =
         method_node.return_type.as_ref().map(|cls_name| names.get_class_with_err(cls_name, errors));
-    MethodSignature { params, return_type }
+    MethodSignature { params, return_type, overriding: None }
 }
 
-pub fn init_cls_signature_registry<'src>(
-    cls_names: &ClassNameRegistry<'src>,
+pub fn init_cls_signature_registry<
+    'src,
+    Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>,
+>(
+    ctx: &Ctx,
     defs: &ClassDefsRegistry<'src>,
     errors: &mut Vec<AnalysisError<'src>>,
 ) -> ClassSignatureRegistry {
@@ -289,13 +306,15 @@ pub fn init_cls_signature_registry<'src>(
                 .node
                 .parent_id
                 .as_ref()
-                .map(|cls_name| cls_names.get_class_with_err(cls_name, errors))
+                .map(|cls_name| ctx.cls_names().get_class_with_err(cls_name, errors))
                 .unwrap_or(ClassId::Lib(LibClassId::AnyRef));
 
             let constructors = def
                 .constructors
                 .iter()
-                .map(|(id, cons)| (id, resolve_params_signature(cls_names, &cons.params, errors)))
+                .map(|(id, cons)| {
+                    (id, resolve_params_signature(ctx.cls_names(), &cons.params, errors))
+                })
                 .collect();
 
             let methods = def
@@ -305,7 +324,8 @@ pub fn init_cls_signature_registry<'src>(
                     let signatures = method_overloads
                         .iter()
                         .map(|(overload_id, method)| {
-                            let signature = resolve_method_signature(cls_names, method, errors);
+                            let signature =
+                                resolve_method_signature(ctx.cls_names(), method, errors);
                             (overload_id, signature)
                         })
                         .collect();
@@ -316,7 +336,8 @@ pub fn init_cls_signature_registry<'src>(
             (id, ClassSignature { id: id.into(), parent, constructors, methods })
         })
         .collect();
-    check_inheritance(signatures, defs, errors)
+    let signatures = check_inheritance(signatures, defs, errors);
+    resolve_overrides(signatures, ctx, errors)
 }
 
 enum VisitStatus {
@@ -378,6 +399,124 @@ fn check_inheritance<'src>(
         .collect();
     signatures.combine(statuses, |signature, is_valid| {
         if is_valid { signature } else { ClassSignature { parent: ClassId::Invalid, ..signature } }
+    })
+}
+
+struct WithSignatures<'a, 'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>> {
+    signatures: &'a ClassSignatureRegistry,
+    ctx: &'a Ctx,
+    phantom: PhantomData<&'src str>,
+}
+impl<'a, 'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>> ClassSignatureCtx
+    for WithSignatures<'a, 'src, Ctx>
+{
+    fn signatures(&self) -> &ClassSignatureRegistry {
+        self.signatures
+    }
+}
+impl<'a, 'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>> StdlibCtx
+    for WithSignatures<'a, 'src, Ctx>
+{
+    fn stdlib(&self) -> &ShipStdLib {
+        self.ctx.stdlib()
+    }
+}
+impl<'a, 'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>> ClassNamesCtx<'src>
+    for WithSignatures<'a, 'src, Ctx>
+{
+    fn cls_names(&self) -> &ClassNameRegistry<'src> {
+        self.ctx.cls_names()
+    }
+}
+impl<'a, 'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>>
+    ClassMemberNamesCtx<'src> for WithSignatures<'a, 'src, Ctx>
+{
+    fn member_names(&self) -> &ClassMemberNamesRegistry<'src> {
+        self.ctx.member_names()
+    }
+}
+
+fn find_override<
+    'src,
+    Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src> + ClassSignatureCtx,
+>(
+    ctx: &Ctx,
+    cls_id: UserClassId,
+    signature: &ClassSignature,
+    method_id: MethodId,
+    method_signature: &MethodSignature,
+) -> Option<(ClassId, MethodId)> {
+    let name = ctx.get_member_names(&cls_id.into()).methods.get_name(&method_id.0);
+    let mut parent = signature.parent;
+    while parent != ClassId::Invalid && parent != LibClassId::Class.into() {
+        let parent_signature = ctx.get_cls_signature(&parent);
+        let parent_methods = &parent_signature.methods;
+
+        for (parent_name_id, overloads) in parent_methods {
+            let parent_name = ctx.get_member_names(&parent).methods.get_name(&parent_name_id);
+            if name == parent_name {
+                for (parent_overload_id, overload) in overloads {
+                    if method_signature.params == overload.params {
+                        //TODO error on different return types
+                        return Some((parent, (parent_name_id, parent_overload_id).into()));
+                    }
+                }
+            }
+        }
+        parent = parent_signature.parent;
+    }
+
+    None
+}
+
+fn resolve_overrides<'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>>(
+    signatures: ClassSignatureRegistry,
+    ctx: &Ctx,
+    errors: &mut Vec<AnalysisError<'src>>,
+) -> ClassSignatureRegistry {
+    let overrides = signatures
+        .iter()
+        .map(|(id, signature)| {
+            let method_overrides = signature
+                .methods
+                .iter()
+                .map(|(name_id, overloads)| {
+                    (
+                        name_id,
+                        overloads
+                            .iter()
+                            .map(|(overload_id, method)| {
+                                (
+                                    overload_id,
+                                    find_override(
+                                        &WithSignatures {
+                                            signatures: &signatures,
+                                            ctx,
+                                            phantom: PhantomData,
+                                        },
+                                        id,
+                                        signature,
+                                        (name_id, overload_id).into(),
+                                        method,
+                                    ),
+                                )
+                            })
+                            .collect(),
+                    )
+                })
+                .collect();
+            (id, method_overrides)
+        })
+        .collect();
+
+    signatures.combine(overrides, |signature, overrides| ClassSignature {
+        methods: signature.methods.combine(overrides, |overloads, overrides| {
+            overloads.combine(overrides, |overload, overriding| MethodSignature {
+                overriding,
+                ..overload
+            })
+        }),
+        ..signature
     })
 }
 

@@ -1,6 +1,7 @@
 pub mod analyzer;
 pub mod ast;
 
+pub mod codegen;
 pub mod config;
 
 pub use config::CompilerConfig;
@@ -32,7 +33,8 @@ pub fn process(input: &str, config: CompilerConfig) {
     let mut all_diagnostics = parse_data.diagnostics;
     let lib = stdlib();
     if let Some(ast) = parse_data.program {
-        let (registry, mut diagnostics) = Analyzer::new(ast).analyze(&lib);
+        let (cls_names, cls_member_names, registry, mut diagnostics) =
+            Analyzer::new(ast).analyze(&lib);
         all_diagnostics.append(&mut diagnostics);
     }
     for item in &all_diagnostics {

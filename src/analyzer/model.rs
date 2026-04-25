@@ -63,6 +63,14 @@ impl ClassModel {
     }
 }
 pub type ClassModelRegistry = ClassRegistry<ClassModel>;
+pub trait ClassModelCtx {
+    fn cls_models(&self) -> &ClassModelRegistry;
+}
+impl ClassModelCtx for ClassModelRegistry {
+    fn cls_models(&self) -> &ClassModelRegistry {
+        self
+    }
+}
 
 impl ClassModelRegistry {
     pub fn new<'a, 'src>(

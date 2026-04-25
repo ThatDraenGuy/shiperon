@@ -211,7 +211,7 @@ pub trait FindFieldCtx<'src>:
         &self,
         cls_id: ClassId,
         field_name: &Rc<ShipId<'src>>,
-    ) -> Result<(FieldId, &FieldModel), FieldError<'src>>;
+    ) -> Result<(ClassId, FieldId, &FieldModel), FieldError<'src>>;
 }
 impl<'src, Ctx: StdlibCtx + ClassSignatureCtx + ClassMemberNamesCtx<'src> + ClassFieldsCtx>
     FindFieldCtx<'src> for Ctx
@@ -220,13 +220,13 @@ impl<'src, Ctx: StdlibCtx + ClassSignatureCtx + ClassMemberNamesCtx<'src> + Clas
         &self,
         cls_id: ClassId,
         field_name: &Rc<ShipId<'src>>,
-    ) -> Result<(FieldId, &FieldModel), FieldError<'src>> {
+    ) -> Result<(ClassId, FieldId, &FieldModel), FieldError<'src>> {
         let signature = self.get_cls_signature(&cls_id);
         let members = self.get_member_names(&cls_id);
         let fields = self.get_cls_fields(&cls_id);
 
         if let Some(field_id) = members.fields.get_by_name(field_name.id) {
-            Ok((field_id, fields.registry.get(&field_id)))
+            Ok((cls_id, field_id, fields.registry.get(&field_id)))
         } else if cls_id == LibClassId::Class.into() || cls_id == ClassId::Invalid {
             Err(FieldError::UndefinedFieldName { name: field_name.clone() })
         } else {
