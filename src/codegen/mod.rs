@@ -385,9 +385,11 @@ impl<'ctx> StdLibImpl<'ctx> {
         let lib_impl = stdlib.cls_impl(cls_id);
 
         let mut struct_member_types = Vec::new();
-        if *cls_id != LibClassId::Class {
+        if *cls_id == LibClassId::Class {
+            struct_member_types.push(llvm.ctx.ptr_type(AddressSpace::default()).into()); //vtable ptr
+        } else {
             let parent_obj_type = ready[&parent_id].object_type;
-            struct_member_types.push(parent_obj_type.into()); //parent obj type    
+            struct_member_types.push(parent_obj_type.into()); //parent obj type
         };
 
         let fields = stdlib
@@ -458,13 +460,13 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
     }
 
     pub fn codegen(&self) {
-        // let res: Vec<_> = self
-        //     .ast
-        //     .cls_models()
-        //     .iter()
-        //     .map(|(cls_id, model)| self.codegen_vtables(cls_id, model))
-        //     .collect();
-        todo!()
+        for (cls_id, cls) in self.ast.cls_models() {
+            for (name_id, overloads) in &cls.methods {
+                for (overload_id, method) in overloads {
+                    self.codegen_method(&cls_id, (name_id, overload_id).into(), method);
+                }
+            }
+        }
     }
 }
 
@@ -476,6 +478,6 @@ pub fn compile<'src>(ast: ShipContext<'src>) {
     let ctx = inkwell::context::Context::create();
 
     let codegen = CodegenContext::new(ast, &ctx);
-    println!("{}", codegen.llvm.module.print_to_string());
     codegen.codegen();
+    println!("{}", codegen.llvm.module.print_to_string().to_string());
 }

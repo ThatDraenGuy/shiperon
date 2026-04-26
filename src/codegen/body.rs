@@ -1,29 +1,32 @@
-use std::collections::{LinkedList, VecDeque};
+use std::collections::VecDeque;
 
 use inkwell::{
     AddressSpace,
-    types::BasicMetadataTypeEnum,
     values::{AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValueEnum, PointerValue},
 };
 
 use crate::{
     StdlibCtx,
     analyzer::{
-        body::{AssignTarget, Body, Stmt},
+        body::{AssignTarget, Body, BodyReturn, Stmt},
         expr::{CallExpr, Expr, ExprModel, PrimitiveExpr},
-        field::FieldModel,
-        model::ClassModelCtx,
-        registry::{ClassId, FieldId, Registry, UserClassId, VarId},
+        registry::{ClassId, FieldId, Registry, VarId},
     },
-    codegen::{CodegenContext, GetFieldModels, GetFieldNameCtx, GetValueType, LLVMCtx},
+    codegen::{ClassImpl, CodegenContext, GetFieldModels, GetFieldNameCtx, GetValueType, LLVMCtx},
 };
 
 type BodyScope<'ctx> = Registry<VarId, (ClassId, PointerValue<'ctx>)>;
 
 pub struct ScopeStack<'ctx> {
     inner: VecDeque<BodyScope<'ctx>>,
+    this_ptr: PointerValue<'ctx>,
 }
 impl<'ctx> ScopeStack<'ctx> {
+    pub fn new_method(scope: BodyScope<'ctx>, this_ptr: PointerValue<'ctx>) -> Self {
+        let mut inner = VecDeque::new();
+        inner.push_back(scope);
+        Self { inner, this_ptr }
+    }
     fn curr(&self) -> &BodyScope<'ctx> {
         self.inner.back().unwrap()
     }
@@ -50,6 +53,13 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
     //         ClassId::Invalid => unreachable!(),
     //     }
     // }
+    fn get_cls_impl(&self, cls_id: &ClassId) -> &ClassImpl<'ctx> {
+        match cls_id {
+            ClassId::User(user_class_id) => self.impls.get(user_class_id),
+            ClassId::Lib(lib_class_id) => self.stdlib_impl.get(lib_class_id),
+            ClassId::Invalid => unreachable!(),
+        }
+    }
 
     pub fn resolve_field(
         &self,
@@ -57,7 +67,7 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
         cls_id: &ClassId,
         field_id: &FieldId,
     ) -> PointerValue<'ctx> {
-        let cls_impl = self.impls.get(todo!());
+        let cls_impl = self.get_cls_impl(cls_id);
         let struct_type = cls_impl.object_type;
         let obj_ptr = object.into_pointer_value(); //TODO rework
         let field_impl = cls_impl.fields.get(field_id);
@@ -71,7 +81,7 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
             )
             .expect("FATAL: LLVM failed to build_struct_gep")
     }
-    pub fn codegen_body(&'ctx self, scopes: &mut ScopeStack<'ctx>, body: &Body) {
+    pub fn codegen_body(&self, scopes: &mut ScopeStack<'ctx>, body: &Body) {
         for stmt in &body.stmts {
             match stmt {
                 Stmt::VarDef { id, init_expr } => {
@@ -96,10 +106,23 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
                 Stmt::Invalid => unreachable!(),
             }
         }
+        match &body.return_expr {
+            Some(BodyReturn::Value(expr)) => {
+                let ret_val = self.codegen_expr(scopes, expr);
+                self.builder()
+                    .build_return(Some(&ret_val))
+                    .expect("FATAL: LLVM failed to build_return");
+            },
+            Some(BodyReturn::Void) => {
+                self.builder().build_return(None).expect("FATAL: LLVM failed to build_return");
+            },
+            Some(BodyReturn::Never) => {},
+            None => {},
+        };
     }
 
     pub fn codegen_expr(
-        &'ctx self,
+        &self,
         scopes: &mut ScopeStack<'ctx>,
         expr: &ExprModel,
     ) -> BasicValueEnum<'ctx> {
@@ -145,14 +168,14 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
                     char_type.const_int(*c as u64, false).into()
                 },
             },
-            Expr::This => todo!(),
+            Expr::This => scopes.this_ptr.into(),
             Expr::ClassCast { expr, cls_id } => todo!(),
             Expr::Invalid => todo!(),
         }
     }
 
     pub fn codegen_assign_target(
-        &'ctx self,
+        &self,
         scopes: &mut ScopeStack<'ctx>,
         target: &AssignTarget,
     ) -> PointerValue<'ctx> {
@@ -171,7 +194,7 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
     }
 
     pub fn codegen_call(
-        &'ctx self,
+        &self,
         scopes: &mut ScopeStack<'ctx>,
         call: &CallExpr,
     ) -> AnyValueEnum<'ctx> {

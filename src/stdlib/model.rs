@@ -30,7 +30,7 @@ pub struct LibClassModel {
 
 fn int_compare<'ctx, 'src>(
     predicate: IntPredicate,
-    ctx: &'ctx CodegenContext<'ctx, 'src>,
+    ctx: &CodegenContext<'ctx, 'src>,
     object: BasicValueEnum<'ctx>,
     args: &[BasicValueEnum<'ctx>],
 ) -> AnyValueEnum<'ctx> {
@@ -47,7 +47,7 @@ fn int_compare<'ctx, 'src>(
 }
 
 fn int_to_float<'ctx, 'src>(
-    ctx: &'ctx CodegenContext<'ctx, 'src>,
+    ctx: &CodegenContext<'ctx, 'src>,
     i: IntValue<'ctx>,
 ) -> FloatValue<'ctx> {
     ctx.builder()
@@ -56,7 +56,7 @@ fn int_to_float<'ctx, 'src>(
 }
 
 fn float_to_int<'ctx, 'src>(
-    ctx: &'ctx CodegenContext<'ctx, 'src>,
+    ctx: &CodegenContext<'ctx, 'src>,
     f: FloatValue<'ctx>,
 ) -> IntValue<'ctx> {
     ctx.builder()
@@ -66,7 +66,7 @@ fn float_to_int<'ctx, 'src>(
 
 fn float_compare<'ctx, 'src>(
     predicate: FloatPredicate,
-    ctx: &'ctx CodegenContext<'ctx, 'src>,
+    ctx: &CodegenContext<'ctx, 'src>,
     object: BasicValueEnum<'ctx>,
     args: &[BasicValueEnum<'ctx>],
 ) -> AnyValueEnum<'ctx> {

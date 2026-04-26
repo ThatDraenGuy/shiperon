@@ -25,7 +25,7 @@ use crate::{
 
 pub struct LibMethodImpl {
     pub call_impl: for<'ctx, 'src> fn(
-        ctx: &'ctx CodegenContext<'ctx, 'src>,
+        ctx: &CodegenContext<'ctx, 'src>,
         object: BasicValueEnum<'ctx>,
         args: &[BasicValueEnum<'ctx>],
     ) -> AnyValueEnum<'ctx>,

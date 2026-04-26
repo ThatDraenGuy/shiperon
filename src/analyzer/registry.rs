@@ -117,6 +117,9 @@ impl<Id: RegistryId, V> Registry<Id, V> {
         self.into_iter()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.inner.iter().all(Option::is_none)
+    }
     #[inline]
     pub fn transform<V2, F>(self, mut f: F) -> Registry<Id, V2>
     where

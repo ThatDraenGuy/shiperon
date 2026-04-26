@@ -233,7 +233,7 @@ impl<'src, Ctx: StdlibCtx + ClassSignatureCtx + ClassMemberNamesCtx<'src>>
             .get_member_names(&cls_id)
             .methods
             .get_by_name(name)
-            .ok_or(MethodError::UndefinedMethod { name: name_node.clone() })?;
+            .ok_or(MethodError::UndefinedMethod { name: name_node.clone() })?; //TODO fix!!!
 
         methods
             .get(&name_id)
