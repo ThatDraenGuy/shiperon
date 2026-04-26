@@ -2,7 +2,7 @@ mod model;
 
 use std::collections::HashMap;
 
-use inkwell::values::{AnyValueEnum, BasicValueEnum};
+use inkwell::values::{AnyValueEnum, BasicValueEnum, FunctionValue};
 
 use crate::{
     analyzer::{
@@ -14,7 +14,7 @@ use crate::{
         },
         signature::ClassSignature,
     },
-    codegen::CodegenContext,
+    codegen::{CodegenContext, ShipLLVMContext},
     stdlib::model::{LibClassModel, models},
 };
 
@@ -29,18 +29,16 @@ pub struct LibMethodImpl {
         object: BasicValueEnum<'ctx>,
         args: &[BasicValueEnum<'ctx>],
     ) -> AnyValueEnum<'ctx>,
-    pub def_impl: for<'ctx, 'src> fn(&'ctx CodegenContext<'ctx, 'src>),
+    pub def_impl: for<'ctx> fn(&ShipLLVMContext<'ctx>) -> Option<FunctionValue<'ctx>>,
 }
 
-pub struct ClassMemberImpls {
+pub struct LibClassImpl {
     pub methods: MethodRegistry<LibMethodImpl>,
 }
 
 pub struct ShipStdLib {
-    inner: HashMap<
-        LibClassId,
-        (ClassSignature, ClassFields, ClassMemberNames<'static>, ClassMemberImpls),
-    >,
+    inner:
+        HashMap<LibClassId, (ClassSignature, ClassFields, ClassMemberNames<'static>, LibClassImpl)>,
     invalid_cls: ClassSignature,
     invalid_fields: ClassFields,
     invalid_member_names: ClassMemberNames<'static>,
@@ -70,7 +68,7 @@ impl ShipStdLib {
     pub fn cls_member_names(&self, cls_id: &LibClassId) -> &ClassMemberNames<'static> {
         &self.inner.get(cls_id).unwrap().2
     }
-    pub fn cls_member_impls(&self, cls_id: &LibClassId) -> &ClassMemberImpls {
+    pub fn cls_impl(&self, cls_id: &LibClassId) -> &LibClassImpl {
         &self.inner.get(cls_id).unwrap().3
     }
     pub fn invalid_signature(&self) -> &ClassSignature {
@@ -95,7 +93,7 @@ impl StdlibCtx for ShipStdLib {
 
 fn process_model(
     model: LibClassModel,
-) -> (ClassSignature, ClassFields, ClassMemberNames<'static>, ClassMemberImpls) {
+) -> (ClassSignature, ClassFields, ClassMemberNames<'static>, LibClassImpl) {
     let mut cons_builder = RegistryBuilder::default();
     for cons in model.constructors {
         cons_builder.insert(cons);
@@ -127,7 +125,7 @@ fn process_model(
         },
         ClassFields { registry: fields },
         ClassMemberNames { methods: method_names, fields: field_names },
-        ClassMemberImpls { methods: method_impls },
+        LibClassImpl { methods: method_impls },
     )
 }
 

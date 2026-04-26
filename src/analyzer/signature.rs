@@ -1,7 +1,6 @@
 use super::registry::*;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::ops::Deref;
 use std::rc::Rc;
 
 use derive_more::Display;
@@ -317,22 +316,9 @@ pub fn init_cls_signature_registry<
                 })
                 .collect();
 
-            let methods = def
-                .methods
-                .iter()
-                .map(|(id, method_overloads)| {
-                    let signatures = method_overloads
-                        .iter()
-                        .map(|(overload_id, method)| {
-                            let signature =
-                                resolve_method_signature(ctx.cls_names(), method, errors);
-                            (overload_id, signature)
-                        })
-                        .collect();
-
-                    (id, signatures)
-                })
-                .collect();
+            let methods = def.methods.map_method(|_method_id, method| {
+                resolve_method_signature(ctx.cls_names(), method, errors)
+            });
             (id, ClassSignature { id: id.into(), parent, constructors, methods })
         })
         .collect();
@@ -477,34 +463,15 @@ fn resolve_overrides<'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNam
     let overrides = signatures
         .iter()
         .map(|(id, signature)| {
-            let method_overrides = signature
-                .methods
-                .iter()
-                .map(|(name_id, overloads)| {
-                    (
-                        name_id,
-                        overloads
-                            .iter()
-                            .map(|(overload_id, method)| {
-                                (
-                                    overload_id,
-                                    find_override(
-                                        &WithSignatures {
-                                            signatures: &signatures,
-                                            ctx,
-                                            phantom: PhantomData,
-                                        },
-                                        id,
-                                        signature,
-                                        (name_id, overload_id).into(),
-                                        method,
-                                    ),
-                                )
-                            })
-                            .collect(),
-                    )
-                })
-                .collect();
+            let method_overrides = signature.methods.map_method(|method_id, method| {
+                find_override(
+                    &WithSignatures { signatures: &signatures, ctx, phantom: PhantomData },
+                    id,
+                    signature,
+                    method_id,
+                    method,
+                )
+            });
             (id, method_overrides)
         })
         .collect();

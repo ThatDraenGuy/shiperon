@@ -1,0 +1,24 @@
+class Parent is
+    var value: Integer(1)
+
+    method Stuff() is
+    end
+
+    method Stuff2(): Integer is
+        return value
+    end
+end
+
+class Child extends Parent is
+    this() is
+    end
+    method Stuff2(): Integer is
+        return 1
+    end
+end
+
+class Program is
+    method test() is
+        var item: Child()
+    end
+end

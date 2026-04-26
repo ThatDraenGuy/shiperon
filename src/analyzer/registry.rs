@@ -473,6 +473,24 @@ mod method {
         pub fn get_method(&self, id: &MethodId) -> &V {
             self.get(&id.0).get(&id.1)
         }
+        pub fn map_method<F, V2>(&self, mut f: F) -> MethodRegistry<V2>
+        where
+            F: FnMut(MethodId, &V) -> V2,
+        {
+            self.iter()
+                .map(|(name_id, overloads)| {
+                    (
+                        name_id,
+                        overloads
+                            .iter()
+                            .map(|(overload_id, method)| {
+                                (overload_id, f((name_id, overload_id).into(), method))
+                            })
+                            .collect(),
+                    )
+                })
+                .collect()
+        }
     }
 }
 pub use method::*;

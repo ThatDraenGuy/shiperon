@@ -23,6 +23,7 @@ pub mod stdlib;
 pub use stdlib::{ShipStdLib, StdlibCtx};
 
 use crate::analyzer::Analyzer;
+use crate::codegen::compile;
 use crate::diagnostics::Renderable;
 use crate::stdlib::stdlib;
 
@@ -33,9 +34,12 @@ pub fn process(input: &str, config: CompilerConfig) {
     let mut all_diagnostics = parse_data.diagnostics;
     let lib = stdlib();
     if let Some(ast) = parse_data.program {
-        let (cls_names, cls_member_names, registry, mut diagnostics) =
-            Analyzer::new(ast).analyze(&lib);
+        let (ctx, mut diagnostics) = Analyzer::new(ast).analyze(lib);
         all_diagnostics.append(&mut diagnostics);
+
+        if all_diagnostics.is_empty() {
+            compile(ctx);
+        }
     }
     for item in &all_diagnostics {
         println!("{}\n", item.render(&parse_data.src));

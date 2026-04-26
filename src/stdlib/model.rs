@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use inkwell::{
-    FloatPredicate, IntPredicate,
+    AddressSpace, FloatPredicate, IntPredicate,
     values::{AnyValueEnum, BasicValueEnum, FloatValue, IntValue},
 };
 
@@ -111,7 +111,17 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                     },
                     method_impl: LibMethodImpl {
                         call_impl: |ctx, object, args| todo!(),
-                        def_impl: |ctx| {},
+                        def_impl: |llvm| {
+                            let func_type = llvm.ctx().ptr_type(AddressSpace::default()).fn_type(
+                                &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
+                                false,
+                            );
+                            Some(llvm.module().add_function(
+                                "cls_AnyRef_method_ToString_args_",
+                                func_type,
+                                None,
+                            ))
+                        },
                     },
                 }],
             )]),
@@ -135,7 +145,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                     },
                     method_impl: LibMethodImpl {
                         call_impl: |ctx, object, args| todo!(),
-                        def_impl: |ctx| {},
+                        def_impl: |ctx| None,
                     },
                 }],
             )]),
@@ -165,7 +175,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                             call_impl: |ctx, object, args| {
                                 int_to_float(ctx, object.into_int_value()).into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -185,7 +195,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_int_cast")
                                     .into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -205,7 +215,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_int_cast")
                                     .into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -225,7 +235,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_int_neg")
                                     .into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -248,7 +258,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_int_add")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -268,7 +278,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_add")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -292,7 +302,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_int_sub")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -312,7 +322,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_sub")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -336,7 +346,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_int_mul")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -356,7 +366,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_mul")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -380,7 +390,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_int_div")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -399,7 +409,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_div")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -421,7 +431,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_int_rem")
                                     .into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -438,7 +448,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                 call_impl: |ctx, object, args| {
                                     int_compare(IntPredicate::SLT, ctx, object, args)
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -456,7 +466,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         args,
                                     )
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -474,7 +484,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                 call_impl: |ctx, object, args| {
                                     int_compare(IntPredicate::SLE, ctx, object, args)
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -492,7 +502,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         args,
                                     )
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -510,7 +520,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                 call_impl: |ctx, object, args| {
                                     int_compare(IntPredicate::SGT, ctx, object, args)
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -528,7 +538,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         args,
                                     )
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -546,7 +556,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                 call_impl: |ctx, object, args| {
                                     int_compare(IntPredicate::SGE, ctx, object, args)
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -564,7 +574,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         args,
                                     )
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -582,7 +592,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                 call_impl: |ctx, object, args| {
                                     int_compare(IntPredicate::EQ, ctx, object, args)
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -600,7 +610,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         args,
                                     )
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -632,7 +642,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                             call_impl: |ctx, object, args| {
                                 float_to_int(ctx, object.into_float_value()).into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -652,7 +662,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_float_neg")
                                     .into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -675,7 +685,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_add")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -694,7 +704,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_add")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -718,7 +728,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_sub")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -737,7 +747,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_sub")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -761,7 +771,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_mul")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -780,7 +790,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_mul")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -804,7 +814,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_div")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -823,7 +833,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_div")
                                         .into()
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -846,7 +856,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_float_rem")
                                     .into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -863,7 +873,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                 call_impl: |ctx, object, args| {
                                     float_compare(FloatPredicate::OLT, ctx, object, args)
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -880,7 +890,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     );
                                     float_compare(FloatPredicate::OLT, ctx, object, &[right.into()])
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -898,7 +908,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                 call_impl: |ctx, object, args| {
                                     float_compare(FloatPredicate::OLE, ctx, object, args)
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -915,7 +925,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     );
                                     float_compare(FloatPredicate::OLE, ctx, object, &[right.into()])
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -933,7 +943,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                 call_impl: |ctx, object, args| {
                                     float_compare(FloatPredicate::OGT, ctx, object, args)
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -950,7 +960,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     );
                                     float_compare(FloatPredicate::OGT, ctx, object, &[right.into()])
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -968,7 +978,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                 call_impl: |ctx, object, args| {
                                     float_compare(FloatPredicate::OGE, ctx, object, args)
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -985,7 +995,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     );
                                     float_compare(FloatPredicate::OGE, ctx, object, &[right.into()])
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -1003,7 +1013,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                 call_impl: |ctx, object, args| {
                                     float_compare(FloatPredicate::OEQ, ctx, object, args)
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                         LibMethodModel {
@@ -1020,7 +1030,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     );
                                     float_compare(FloatPredicate::OEQ, ctx, object, &[right.into()])
                                 },
-                                def_impl: |ctx| {},
+                                def_impl: |ctx| None,
                             },
                         },
                     ],
@@ -1053,7 +1063,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_int_cast")
                                     .into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -1074,7 +1084,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_or")
                                     .into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -1095,7 +1105,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_and")
                                     .into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -1116,7 +1126,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_xor")
                                     .into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),
@@ -1136,7 +1146,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_not")
                                     .into()
                             },
-                            def_impl: |ctx| {},
+                            def_impl: |ctx| None,
                         },
                     }],
                 ),

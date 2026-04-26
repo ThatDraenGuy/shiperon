@@ -37,32 +37,32 @@ impl<'src> Analyzer<'src> {
     pub fn new(ast: Rc<ShipProgram<'src>>) -> Self {
         Self { ast }
     }
-    pub fn analyze(
-        &mut self,
-        stdlib: &ShipStdLib,
-    ) -> (
-        ClassNameRegistry<'src>,
-        ClassMemberNamesRegistry<'src>,
-        ClassModelRegistry,
-        Vec<Diagnostic<'src>>,
-    ) {
+    pub fn analyze(&mut self, stdlib: ShipStdLib) -> (ShipContext<'src>, Vec<Diagnostic<'src>>) {
         let mut errors = Vec::new();
 
         let (cls_names, member_names, defs) = init_cls_registry(&self.ast.classes, &mut errors);
         let cls_signatures = init_cls_signature_registry(
-            &SignatureResolutionCtx { stdlib, cls_names: &cls_names, member_names: &member_names },
+            &SignatureResolutionCtx {
+                stdlib: &stdlib,
+                cls_names: &cls_names,
+                member_names: &member_names,
+            },
             &defs,
             &mut errors,
         );
         let cls_fields = init_class_fields_registry(
-            &FieldResolutionCtx { stdlib, cls_signatures: &cls_signatures, cls_names: &cls_names },
+            &FieldResolutionCtx {
+                stdlib: &stdlib,
+                cls_signatures: &cls_signatures,
+                cls_names: &cls_names,
+            },
             &defs,
             &mut errors,
         );
 
         let result = ClassModelRegistry::new(
             BodyResolutionCtx {
-                stdlib,
+                stdlib: &stdlib,
                 cls_names: &cls_names,
                 cls_member_names: &member_names,
                 cls_signatures,
@@ -71,7 +71,10 @@ impl<'src> Analyzer<'src> {
             &defs,
             &mut errors,
         );
-        (cls_names, member_names, result, errors.into_iter().map(|e| e.into()).collect())
+        (
+            ShipContext { stdlib, cls_names, cls_member_names: member_names, cls_models: result },
+            errors.into_iter().map(|e| e.into()).collect(),
+        )
     }
 }
 

@@ -1,6 +1,7 @@
 use std::collections::{LinkedList, VecDeque};
 
 use inkwell::{
+    AddressSpace,
     types::BasicMetadataTypeEnum,
     values::{AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValueEnum, PointerValue},
 };
@@ -187,22 +188,34 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
 
                         let vtable_ptr = self
                             .builder()
-                            .build_struct_gep(
-                                cls_impl.object_type,
+                            .build_load(
+                                self.ctx().ptr_type(AddressSpace::default()),
                                 object.into_pointer_value(),
-                                0,
-                                "vtable",
+                                "vtable_ptr",
                             )
-                            .expect("FATAL: LLVM failed to build_struct_gep");
+                            .expect("FATAL: LLVM failed to build_load");
+                        //SAFETY: vtable should be safe (:
+                        let method_ptr_ptr = unsafe {
+                            self.builder()
+                                .build_gep(
+                                    self.ctx().ptr_type(AddressSpace::default()),
+                                    vtable_ptr.into_pointer_value(),
+                                    &[self
+                                        .ctx()
+                                        .i32_type()
+                                        .const_int(method_impl.vtable_offset, false)],
+                                    "method_ptr_ptr",
+                                )
+                                .expect("FATAL: LLVM failed to build_gep")
+                        };
                         let method_ptr = self
                             .builder()
-                            .build_struct_gep(
-                                cls_impl.vtable_type,
-                                vtable_ptr,
-                                method_impl.vtable_offset.unwrap(), //TODO think
-                                "method",
+                            .build_load(
+                                self.ctx().ptr_type(AddressSpace::default()),
+                                method_ptr_ptr,
+                                "method_ptr",
                             )
-                            .expect("FATAL: LLVM failed to build_struct_gep");
+                            .expect("FATAL: LLVM failed to build_load");
 
                         let meta_args: Vec<_> =
                             args.into_iter().map(BasicMetadataValueEnum::from).collect();
@@ -210,7 +223,7 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
                             .builder()
                             .build_indirect_call(
                                 method_impl.func.get_type(),
-                                method_ptr,
+                                method_ptr.into_pointer_value(),
                                 &meta_args,
                                 "call",
                             )
@@ -218,12 +231,9 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
                         res.as_any_value_enum()
                     },
                     ClassId::Lib(lib_class_id) => {
-                        (self
-                            .stdlib()
-                            .cls_member_impls(lib_class_id)
-                            .methods
-                            .get_method(method)
-                            .call_impl)(self, object, &args)
+                        (self.stdlib().cls_impl(lib_class_id).methods.get_method(method).call_impl)(
+                            self, object, &args,
+                        )
                     },
                     ClassId::Invalid => unreachable!(),
                 }
