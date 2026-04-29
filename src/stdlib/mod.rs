@@ -9,8 +9,8 @@ use crate::{
         def::ClassMemberNames,
         field::ClassFields,
         registry::{
-            ClassId, LibClassId, MethodRegistry, NameRegistry, NameRegistryBuilder, Registry,
-            RegistryBuilder,
+            ClassId, ConsRegistry, LibClassId, MethodRegistry, NameRegistry, NameRegistryBuilder,
+            Registry, RegistryBuilder,
         },
         signature::ClassSignature,
     },
@@ -18,10 +18,13 @@ use crate::{
     stdlib::model::{LibClassModel, models},
 };
 
-// pub struct LibConsModel {
-//     call_impl: for<'ctx, 'src> fn(&'ctx CodegenContext<'ctx, 'src>) -> BasicValueEnum<'ctx>,
-//     def_impl: for<'ctx, 'src> fn(&'ctx CodegenContext<'ctx, 'src>),
-// }
+pub struct LibConsImpl {
+    pub call_impl: for<'ctx, 'src> fn(
+        ctx: &CodegenContext<'ctx, 'src>,
+        args: &[BasicValueEnum<'ctx>],
+    ) -> BasicValueEnum<'ctx>,
+    pub def_impl: for<'ctx> fn(&ShipLLVMContext<'ctx>) -> Option<FunctionValue<'ctx>>,
+}
 
 pub struct LibMethodImpl {
     pub call_impl: for<'ctx, 'src> fn(
@@ -33,6 +36,8 @@ pub struct LibMethodImpl {
 }
 
 pub struct LibClassImpl {
+    pub init_impl: for<'ctx> fn(&ShipLLVMContext<'ctx>) -> Option<FunctionValue<'ctx>>,
+    pub constructors: ConsRegistry<LibConsImpl>,
     pub methods: MethodRegistry<LibMethodImpl>,
 }
 
@@ -96,8 +101,9 @@ fn process_model(
 ) -> (ClassSignature, ClassFields, ClassMemberNames<'static>, LibClassImpl) {
     let mut cons_builder = RegistryBuilder::default();
     for cons in model.constructors {
-        cons_builder.insert(cons);
+        cons_builder.insert((cons.signature, cons.cons_impl));
     }
+    let (cons_signatures, cons_impls) = cons_builder.build().split();
 
     let mut method_builder = NameRegistryBuilder::default();
     for (name, overlaods) in model.methods {
@@ -120,12 +126,16 @@ fn process_model(
         ClassSignature {
             id: model.id.into(),
             parent: model.parent.into(),
-            constructors: cons_builder.build(),
+            constructors: cons_signatures,
             methods: method_signatures,
         },
         ClassFields { registry: fields },
         ClassMemberNames { methods: method_names, fields: field_names },
-        LibClassImpl { methods: method_impls },
+        LibClassImpl {
+            init_impl: model.init_impl,
+            methods: method_impls,
+            constructors: cons_impls,
+        },
     )
 }
 

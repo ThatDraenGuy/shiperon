@@ -577,7 +577,7 @@ mod variable {
     }
     impl Display for VarId {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_fmt(format_args!("Var{}", self.0))
+            f.write_fmt(format_args!("Var{}_", self.0))
         }
     }
     pub type VarNameRegistry<'key> = NameRegistry<'key, VarId>;

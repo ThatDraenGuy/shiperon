@@ -6,10 +6,10 @@ use inkwell::{
     AddressSpace,
     builder::Builder as LLVMBuilder,
     context::Context as LLVMContext,
-    module::Module as LLVMModule,
+    module::{Linkage, Module as LLVMModule},
     targets::{self, Target},
     types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, StructType},
-    values::{ArrayValue, BasicValue, BasicValueEnum, FunctionValue, GlobalValue, PointerValue},
+    values::{FunctionValue, GlobalValue, PointerValue},
 };
 use itertools::Itertools;
 
@@ -21,10 +21,10 @@ use crate::{
         field::FieldModelRegistry,
         model::{ClassModel, ClassModelCtx, ClassModelRegistry},
         registry::{
-            ClassId, ClassNameRegistry, ClassRegistry, FieldId, FieldRegistry, LibClassId,
-            MethodId, MethodRegistry, UserClassId,
+            ClassId, ClassNameRegistry, ClassRegistry, ConsId, ConsRegistry, FieldId,
+            FieldRegistry, LibClassId, MethodId, MethodRegistry, UserClassId,
         },
-        signature::{ClassSignature, MethodSignature},
+        signature::{MethodSignature, ParamsSignature},
     },
 };
 
@@ -181,7 +181,7 @@ impl<'ctx, Ctx: LLVMCtx<'ctx>> GetValueType<'ctx> for Ctx {
     }
 }
 
-pub struct FielImpl {
+pub struct FieldImpl {
     struct_offset: u32,
 }
 
@@ -190,12 +190,18 @@ pub struct MethodImpl<'ctx> {
     vtable_offset: u64,
 }
 
+pub struct ConsImpl<'ctx> {
+    func: FunctionValue<'ctx>,
+}
+
 pub struct ClassImpl<'ctx> {
     object_type: StructType<'ctx>,
     vtable_ptrs: Vec<PointerValue<'ctx>>,
     vtable: GlobalValue<'ctx>,
+    init_func: FunctionValue<'ctx>,
+    constructors: ConsRegistry<ConsImpl<'ctx>>,
     methods: MethodRegistry<MethodImpl<'ctx>>,
-    fields: FieldRegistry<FielImpl>,
+    fields: FieldRegistry<FieldImpl>,
 }
 pub type ClassImplRegistry<'ctx> = ClassRegistry<ClassImpl<'ctx>>;
 
@@ -226,6 +232,17 @@ impl<'ctx> ClassImplRegistry<'ctx> {
 
         format!("cls_{cls_name}_method_{method_name}_args_{mangle}")
     }
+    fn create_cons_name<'src>(
+        ast: &impl ShipCtx<'src>,
+        cls_id: &UserClassId,
+        cons_id: ConsId,
+    ) -> String {
+        let cls_name = ast.cls_names().get_name(cls_id);
+        let signature = &ast.cls_models().get(cls_id).constructors.get(&cons_id).signature;
+        let mangle =
+            signature.param_types.iter().map(|param_type| ast.cls_name(param_type)).join("_");
+        format!("cls_{cls_name}_cons_args_{mangle}")
+    }
 
     fn codegen_method_decl(
         llvm: &impl LLVMCtx<'ctx>,
@@ -247,6 +264,23 @@ impl<'ctx> ClassImplRegistry<'ctx> {
             None => llvm.ctx().void_type().fn_type(&params, false),
         };
         llvm.module().add_function(method_name, func_type, None)
+    }
+    fn codegen_cons_decl(
+        llvm: &impl LLVMCtx<'ctx>,
+        signature: &ParamsSignature,
+        cons_name: &str,
+    ) -> FunctionValue<'ctx> {
+        let mut params: Vec<_> = signature
+            .param_types
+            .iter()
+            .map(|param_type| BasicMetadataTypeEnum::from(llvm.get_value_type(param_type)))
+            .collect();
+        params.insert(
+            0,
+            BasicMetadataTypeEnum::PointerType(llvm.ctx().ptr_type(AddressSpace::default())), //ptr to self
+        );
+        let func_type = llvm.ctx().ptr_type(AddressSpace::default()).fn_type(&params, false);
+        llvm.module().add_function(cons_name, func_type, None)
     }
 
     fn get_user_struct_type<'src>(
@@ -295,10 +329,11 @@ impl<'ctx> ClassImplRegistry<'ctx> {
             ClassId::Lib(lib_class_id) => stdlib.get(lib_class_id),
             ClassId::Invalid => unreachable!(),
         };
+        let parent_obj_type = parent_impl.object_type;
 
         //class object struct type
         let mut struct_member_types = Vec::new();
-        let parent_obj_type = parent_impl.object_type;
+
         struct_member_types.push(parent_obj_type.into()); //parent obj type
         let fields = cls
             .fields
@@ -307,11 +342,24 @@ impl<'ctx> ClassImplRegistry<'ctx> {
                 let field_type = llvm.get_value_type(&field.field_type);
                 let offset = struct_member_types.len();
                 struct_member_types.push(field_type);
-                (field_id, FielImpl { struct_offset: offset as u32 })
+                (field_id, FieldImpl { struct_offset: offset as u32 })
             })
             .collect();
         let object_type = Self::get_user_struct_type(llvm, ast, &cls_id);
         object_type.set_body(&struct_member_types, true);
+
+        let constructors = cls
+            .constructors
+            .iter()
+            .map(|(cons_id, cons)| {
+                let func = Self::codegen_cons_decl(
+                    llvm,
+                    &cons.signature,
+                    &Self::create_cons_name(ast, &cls_id, cons_id),
+                );
+                (cons_id, ConsImpl { func })
+            })
+            .collect();
 
         //class vtable
         let mut vtable_ptrs = parent_impl.vtable_ptrs.clone();
@@ -351,7 +399,28 @@ impl<'ctx> ClassImplRegistry<'ctx> {
             &llvm.ctx().ptr_type(AddressSpace::default()).const_array(&vtable_ptrs),
         );
 
-        ready.insert(cls_id, ClassImpl { vtable, vtable_ptrs, object_type, methods, fields });
+        let init_func_type = llvm
+            .ctx()
+            .void_type()
+            .fn_type(&[llvm.ctx().ptr_type(AddressSpace::default()).into()], false);
+        let init_func = llvm.module().add_function(
+            &format!("cls_{}_init", ast.cls_names().get_name(&cls_id)),
+            init_func_type,
+            None,
+        );
+
+        ready.insert(
+            cls_id,
+            ClassImpl {
+                vtable,
+                vtable_ptrs,
+                init_func,
+                object_type,
+                constructors,
+                methods,
+                fields,
+            },
+        );
         &ready[&cls_id]
     }
 
@@ -373,6 +442,7 @@ impl<'ctx> ClassImplRegistry<'ctx> {
 
 pub struct StdLibImpl<'ctx> {
     impls: HashMap<LibClassId, ClassImpl<'ctx>>,
+    malloc: FunctionValue<'ctx>,
 }
 impl<'ctx> StdLibImpl<'ctx> {
     fn codegen(
@@ -400,11 +470,20 @@ impl<'ctx> StdLibImpl<'ctx> {
                 let field_type = llvm.get_value_type(&field.field_type);
                 let offset = struct_member_types.len();
                 struct_member_types.push(field_type);
-                (field_id, FielImpl { struct_offset: offset as u32 })
+                (field_id, FieldImpl { struct_offset: offset as u32 })
             })
             .collect();
         let object_type = llvm.ctx.opaque_struct_type(stdlib.cls_name(cls_id));
         object_type.set_body(&struct_member_types, true);
+
+        let constructors = lib_impl
+            .constructors
+            .iter()
+            .map(|(cons_id, cons)| {
+                let func = (cons.def_impl)(llvm).unwrap();
+                (cons_id, ConsImpl { func })
+            })
+            .collect();
 
         let mut vtable_ptrs = if *cls_id == LibClassId::Class {
             Vec::new()
@@ -430,20 +509,31 @@ impl<'ctx> StdLibImpl<'ctx> {
             &llvm.ctx().ptr_type(AddressSpace::default()).const_array(&vtable_ptrs),
         );
 
-        ClassImpl { object_type, vtable_ptrs, vtable, methods, fields }
+        let init_func = (lib_impl.init_impl)(llvm).unwrap();
+
+        ClassImpl { object_type, vtable_ptrs, vtable, init_func, constructors, methods, fields }
     }
 
     pub fn new(llvm: &ShipLLVMContext<'ctx>, stdlib: &ShipStdLib) -> Self {
-        let mut impls = HashMap::new();
+        let malloc_type = llvm
+            .ctx
+            .ptr_type(AddressSpace::default())
+            .fn_type(&[llvm.ctx.i64_type().into()], false);
+        let malloc = llvm.module.add_function("GC_malloc", malloc_type, Some(Linkage::External));
 
+        let mut impls = HashMap::new();
         let class_impl = Self::codegen(llvm, stdlib, &mut impls, &LibClassId::Class);
         impls.insert(LibClassId::Class, class_impl);
         let anyref_impl = Self::codegen(llvm, stdlib, &mut impls, &LibClassId::AnyRef);
         impls.insert(LibClassId::AnyRef, anyref_impl);
-        Self { impls }
+
+        Self { impls, malloc }
     }
     pub fn get(&self, cls_id: &LibClassId) -> &ClassImpl<'ctx> {
         self.impls.get(cls_id).unwrap()
+    }
+    pub fn malloc(&self) -> FunctionValue<'ctx> {
+        self.malloc
     }
 }
 

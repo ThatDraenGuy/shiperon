@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use inkwell::{
     AddressSpace, FloatPredicate, IntPredicate,
-    values::{AnyValueEnum, BasicValueEnum, FloatValue, IntValue},
+    values::{AnyValueEnum, BasicValueEnum, FloatValue, FunctionValue, IntValue},
 };
 
 use crate::{
@@ -11,9 +11,14 @@ use crate::{
         registry::LibClassId,
         signature::{MethodSignature, ParamsSignature},
     },
-    codegen::{CodegenContext, LLVMCtx},
-    stdlib::LibMethodImpl,
+    codegen::{CodegenContext, LLVMCtx, ShipLLVMContext},
+    stdlib::{LibConsImpl, LibMethodImpl},
 };
+
+pub struct LibConsModel {
+    pub signature: ParamsSignature,
+    pub cons_impl: LibConsImpl,
+}
 
 pub struct LibMethodModel {
     pub signature: MethodSignature,
@@ -23,7 +28,8 @@ pub struct LibMethodModel {
 pub struct LibClassModel {
     pub id: LibClassId,
     pub parent: LibClassId,
-    pub constructors: Vec<ParamsSignature>,
+    pub init_impl: for<'ctx> fn(&ShipLLVMContext<'ctx>) -> Option<FunctionValue<'ctx>>,
+    pub constructors: Vec<LibConsModel>,
     pub methods: HashMap<&'static str, Vec<LibMethodModel>>,
     pub fields: HashMap<&'static str, FieldModel>,
 }
@@ -89,7 +95,14 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
         LibClassModel {
             id: LibClassId::Class,
             parent: LibClassId::Class,
-            constructors: vec![ParamsSignature::new(vec![])],
+            init_impl: |ctx| None,
+            constructors: vec![LibConsModel {
+                signature: ParamsSignature::empty(),
+                cons_impl: LibConsImpl {
+                    call_impl: |ctx, args| unreachable!(),
+                    def_impl: |ctx| None,
+                },
+            }],
             methods: HashMap::new(),
             fields: HashMap::new(),
         },
@@ -100,7 +113,14 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
         LibClassModel {
             id: LibClassId::AnyRef,
             parent: LibClassId::Class,
-            constructors: vec![ParamsSignature::empty()],
+            init_impl: |ctx| None,
+            constructors: vec![LibConsModel {
+                signature: ParamsSignature::empty(),
+                cons_impl: LibConsImpl {
+                    call_impl: |ctx, args| unreachable!(),
+                    def_impl: |ctx| None,
+                },
+            }],
             methods: HashMap::from([(
                 "ToString",
                 vec![LibMethodModel {
@@ -134,7 +154,14 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
         LibClassModel {
             id: LibClassId::AnyValue,
             parent: LibClassId::Class,
-            constructors: vec![ParamsSignature::empty()],
+            init_impl: |ctx| None,
+            constructors: vec![LibConsModel {
+                signature: ParamsSignature::empty(),
+                cons_impl: LibConsImpl {
+                    call_impl: |ctx, args| unreachable!(),
+                    def_impl: |ctx| None,
+                },
+            }],
             methods: HashMap::from([(
                 "ToString",
                 vec![LibMethodModel {
@@ -158,9 +185,25 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
         LibClassModel {
             id: LibClassId::Integer,
             parent: LibClassId::AnyValue,
+            init_impl: |ctx| None,
             constructors: vec![
-                ParamsSignature::new(vec![LibClassId::Integer.into()]),
-                ParamsSignature::new(vec![LibClassId::Real.into()]),
+                LibConsModel {
+                    signature: ParamsSignature::new(vec![LibClassId::Integer.into()]),
+                    cons_impl: LibConsImpl {
+                        call_impl: |ctx, args| *args.first().unwrap(),
+                        def_impl: |ctx| None,
+                    },
+                },
+                LibConsModel {
+                    signature: ParamsSignature::new(vec![LibClassId::Real.into()]),
+                    cons_impl: LibConsImpl {
+                        call_impl: |ctx, args| {
+                            let f = args.first().unwrap();
+                            float_to_int(ctx, f.into_float_value()).into()
+                        },
+                        def_impl: |ctx| None,
+                    },
+                },
             ],
             methods: HashMap::from([
                 (
@@ -625,9 +668,25 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
         LibClassModel {
             id: LibClassId::Real,
             parent: LibClassId::AnyValue,
+            init_impl: |ctx| None,
             constructors: vec![
-                ParamsSignature::new(vec![LibClassId::Real.into()]),
-                ParamsSignature::new(vec![LibClassId::Integer.into()]),
+                LibConsModel {
+                    signature: ParamsSignature::new(vec![LibClassId::Real.into()]),
+                    cons_impl: LibConsImpl {
+                        call_impl: |ctx, args| *args.first().unwrap(),
+                        def_impl: |ctx| None,
+                    },
+                },
+                LibConsModel {
+                    signature: ParamsSignature::new(vec![LibClassId::Integer.into()]),
+                    cons_impl: LibConsImpl {
+                        call_impl: |ctx, args| {
+                            let f = args.first().unwrap();
+                            int_to_float(ctx, f.into_int_value()).into()
+                        },
+                        def_impl: |ctx| None,
+                    },
+                },
             ],
             methods: HashMap::from([
                 (
@@ -1045,7 +1104,14 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
         LibClassModel {
             id: LibClassId::Boolean,
             parent: LibClassId::AnyValue,
-            constructors: vec![ParamsSignature::empty()],
+            init_impl: |ctx| None,
+            constructors: vec![LibConsModel {
+                signature: ParamsSignature::new(vec![LibClassId::Boolean.into()]),
+                cons_impl: LibConsImpl {
+                    call_impl: |ctx, args| *args.first().unwrap(),
+                    def_impl: |ctx| None,
+                },
+            }],
             methods: HashMap::from([
                 (
                     "toInteger",
@@ -1160,7 +1226,11 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
         LibClassModel {
             id: LibClassId::Array,
             parent: LibClassId::AnyRef,
-            constructors: vec![ParamsSignature::new(vec![LibClassId::Integer.into()])],
+            init_impl: |ctx| todo!(),
+            constructors: vec![LibConsModel {
+                signature: ParamsSignature::new(vec![LibClassId::Integer.into()]),
+                cons_impl: LibConsImpl { call_impl: |ctx, args| todo!(), def_impl: |ctx| todo!() },
+            }],
             methods: HashMap::from([
                 (
                     "toList",
@@ -1231,10 +1301,32 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
         LibClassModel {
             id: LibClassId::List,
             parent: LibClassId::AnyRef,
+            init_impl: |ctx| todo!(),
             constructors: vec![
-                ParamsSignature::empty(),
-                ParamsSignature::new(vec![LibClassId::AnyRef.into()]),
-                ParamsSignature::new(vec![LibClassId::AnyRef.into(), LibClassId::Integer.into()]),
+                LibConsModel {
+                    signature: ParamsSignature::empty(),
+                    cons_impl: LibConsImpl {
+                        call_impl: |ctx, args| todo!(),
+                        def_impl: |ctx| todo!(),
+                    },
+                },
+                LibConsModel {
+                    signature: ParamsSignature::new(vec![LibClassId::AnyRef.into()]),
+                    cons_impl: LibConsImpl {
+                        call_impl: |ctx, args| todo!(),
+                        def_impl: |ctx| todo!(),
+                    },
+                },
+                LibConsModel {
+                    signature: ParamsSignature::new(vec![
+                        LibClassId::AnyRef.into(),
+                        LibClassId::Integer.into(),
+                    ]),
+                    cons_impl: LibConsImpl {
+                        call_impl: |ctx, args| todo!(),
+                        def_impl: |ctx| todo!(),
+                    },
+                },
             ],
             methods: HashMap::from([
                 (

@@ -2,7 +2,10 @@ use std::collections::VecDeque;
 
 use inkwell::{
     AddressSpace,
-    values::{AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValueEnum, PointerValue},
+    basic_block::BasicBlock,
+    values::{
+        AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValueEnum, FunctionValue, PointerValue,
+    },
 };
 
 use crate::{
@@ -10,6 +13,7 @@ use crate::{
     analyzer::{
         body::{AssignTarget, Body, BodyReturn, Stmt},
         expr::{CallExpr, Expr, ExprModel, PrimitiveExpr},
+        field::{FieldExpr, FieldModel},
         registry::{ClassId, FieldId, Registry, VarId},
     },
     codegen::{ClassImpl, CodegenContext, GetFieldModels, GetFieldNameCtx, GetValueType, LLVMCtx},
@@ -20,12 +24,19 @@ type BodyScope<'ctx> = Registry<VarId, (ClassId, PointerValue<'ctx>)>;
 pub struct ScopeStack<'ctx> {
     inner: VecDeque<BodyScope<'ctx>>,
     this_ptr: PointerValue<'ctx>,
+    func: FunctionValue<'ctx>,
+    vars_block: BasicBlock<'ctx>,
 }
 impl<'ctx> ScopeStack<'ctx> {
-    pub fn new_method(scope: BodyScope<'ctx>, this_ptr: PointerValue<'ctx>) -> Self {
+    pub fn new(
+        scope: BodyScope<'ctx>,
+        this_ptr: PointerValue<'ctx>,
+        func: FunctionValue<'ctx>,
+        vars_block: BasicBlock<'ctx>,
+    ) -> Self {
         let mut inner = VecDeque::new();
         inner.push_back(scope);
-        Self { inner, this_ptr }
+        Self { inner, this_ptr, func, vars_block }
     }
     fn curr(&self) -> &BodyScope<'ctx> {
         self.inner.back().unwrap()
@@ -42,17 +53,6 @@ impl<'ctx> ScopeStack<'ctx> {
 }
 
 impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
-    // pub fn get_field_model(&self, cls_id: &ClassId, field_id: &FieldId) -> &FieldModel {
-    //     match cls_id {
-    //         ClassId::User(user_class_id) => {
-    //             self.ast.cls_models().get(user_class_id).fields.get(field_id)
-    //         },
-    //         ClassId::Lib(lib_class_id) => {
-    //             self.stdlib().cls_fields(lib_class_id).registry.get(field_id)
-    //         },
-    //         ClassId::Invalid => unreachable!(),
-    //     }
-    // }
     fn get_cls_impl(&self, cls_id: &ClassId) -> &ClassImpl<'ctx> {
         match cls_id {
             ClassId::User(user_class_id) => self.impls.get(user_class_id),
@@ -81,6 +81,24 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
             )
             .expect("FATAL: LLVM failed to build_struct_gep")
     }
+    pub fn alloc_body_vars(
+        &self,
+        body: &Body,
+        vars_block: BasicBlock<'ctx>,
+    ) -> Registry<VarId, (ClassId, PointerValue<'ctx>)> {
+        self.builder().position_at_end(vars_block);
+        body.vars
+            .iter()
+            .map(|(var_id, var)| {
+                let param_ptr = self
+                    .builder()
+                    .build_alloca(self.get_value_type(&var.var_type), &format!("{var_id}_Alloc"))
+                    .expect("FATAL: LLVM failed to build_alloca");
+                (var_id, (var.var_type, param_ptr))
+            })
+            .collect()
+    }
+
     pub fn codegen_body(&self, scopes: &mut ScopeStack<'ctx>, body: &Body) {
         for stmt in &body.stmts {
             match stmt {
@@ -98,8 +116,79 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
                         .build_store(target_ptr, value)
                         .expect("FATAL: LLVM failed to build_store");
                 },
-                Stmt::While { condition, body } => todo!(),
-                Stmt::If { condition, then_body, else_body } => todo!(),
+                Stmt::While { condition, body } => {
+                    let condition_block =
+                        self.ctx().append_basic_block(scopes.func, "while_condition");
+                    let body_block = self.ctx().append_basic_block(scopes.func, "while_body");
+                    let after_block = self.ctx().append_basic_block(scopes.func, "while_after");
+
+                    self.builder()
+                        .build_unconditional_branch(condition_block)
+                        .expect("FATAL: LLVM failed to build_branch");
+
+                    self.builder().position_at_end(condition_block);
+                    let condition = self.codegen_expr(scopes, condition).into_int_value();
+                    self.builder()
+                        .build_conditional_branch(condition, body_block, after_block)
+                        .expect("FATAL: LLVM failed to build_branch");
+
+                    let body_vars = self.alloc_body_vars(body, scopes.vars_block);
+                    self.builder().position_at_end(body_block);
+
+                    scopes.enter(body_vars);
+                    self.codegen_body(scopes, body);
+                    scopes.exit();
+                    self.builder()
+                        .build_unconditional_branch(condition_block)
+                        .expect("FATAL: LLVM failed to build_branch");
+
+                    self.builder().position_at_end(after_block);
+                },
+                Stmt::If { condition, then_body, else_body } => {
+                    let condition_block =
+                        self.ctx().append_basic_block(scopes.func, "if_condition");
+                    let then_block = self.ctx().append_basic_block(scopes.func, "then_body");
+                    let else_block = if else_body.is_some() {
+                        Some(self.ctx().append_basic_block(scopes.func, "else_body"))
+                    } else {
+                        None
+                    };
+                    let after_block = self.ctx().append_basic_block(scopes.func, "after_if");
+
+                    self.builder()
+                        .build_unconditional_branch(condition_block)
+                        .expect("FATAL: LLVM failed to build_branch");
+                    self.builder().position_at_end(condition_block);
+                    let condition = self.codegen_expr(scopes, condition).into_int_value();
+                    self.builder()
+                        .build_conditional_branch(
+                            condition,
+                            then_block,
+                            else_block.unwrap_or(after_block),
+                        )
+                        .expect("FATAL: LLVM failed to build_branch");
+
+                    let then_vars = self.alloc_body_vars(then_body, scopes.vars_block);
+                    self.builder().position_at_end(then_block);
+                    scopes.enter(then_vars);
+                    self.codegen_body(scopes, then_body);
+                    scopes.exit();
+                    self.builder()
+                        .build_unconditional_branch(after_block)
+                        .expect("FATAL: LLVM failed to build_branch");
+
+                    if let Some(else_body) = else_body {
+                        let else_vars = self.alloc_body_vars(else_body, scopes.vars_block);
+                        self.builder().position_at_end(else_block.unwrap());
+                        scopes.enter(else_vars);
+                        self.codegen_body(scopes, else_body);
+                        scopes.exit();
+                        self.builder()
+                            .build_unconditional_branch(after_block)
+                            .expect("FATAL: LLVM failed to build_branch");
+                    }
+                    self.builder().position_at_end(after_block);
+                },
                 Stmt::Call(call) => {
                     self.codegen_call(scopes, call);
                 },
@@ -116,9 +205,69 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
             Some(BodyReturn::Void) => {
                 self.builder().build_return(None).expect("FATAL: LLVM failed to build_return");
             },
-            Some(BodyReturn::Never) => {},
+            Some(BodyReturn::Never) => {
+                self.builder()
+                    .build_unreachable()
+                    .expect("FATAL: LLVM failed to build_unreachable");
+            },
             None => {},
         };
+    }
+
+    fn codegen_primitive(&self, primitive: &PrimitiveExpr) -> BasicValueEnum<'ctx> {
+        match primitive {
+            PrimitiveExpr::Integer(i) => {
+                let int_type = self.ctx().i32_type();
+                int_type.const_int(*i as u64, true).into()
+            },
+            PrimitiveExpr::Real(r) => {
+                let float_type = self.ctx().f32_type();
+                float_type.const_float((*r).into()).into()
+            },
+            PrimitiveExpr::String(s) => {
+                let string = self.ctx().const_string(s.as_bytes(), true);
+                string.into()
+            },
+            PrimitiveExpr::Char(c) => {
+                let char_type = self.ctx().i8_type();
+                char_type.const_int(*c as u64, false).into()
+            },
+        }
+    }
+
+    pub fn codegen_field(&self, field: &FieldModel) -> BasicValueEnum<'ctx> {
+        match &field.init_expr {
+            FieldExpr::Primitive(primitive_expr) => self.codegen_primitive(primitive_expr),
+            FieldExpr::Cons { class, cons, args } => {
+                let args: Vec<_> = args
+                    .iter()
+                    .map(|arg| self.codegen_field(arg))
+                    // .map(BasicMetadataValueEnum::from)
+                    .collect();
+
+                match class {
+                    ClassId::User(user_class_id) => {
+                        let cons_impl = self.impls.get(user_class_id).constructors.get(cons);
+                        let cons_func = cons_impl.func;
+
+                        let meta_args: Vec<_> =
+                            args.into_iter().map(BasicMetadataValueEnum::from).collect();
+                        let call_res = self
+                            .builder()
+                            .build_call(cons_func, &meta_args, "cons")
+                            .expect("FATAL: LLVM failed to build_call");
+                        call_res.try_as_basic_value().unwrap_basic()
+                    },
+                    ClassId::Lib(lib_class_id) => {
+                        (self.stdlib().cls_impl(lib_class_id).constructors.get(cons).call_impl)(
+                            self, &args,
+                        )
+                    },
+                    ClassId::Invalid => unreachable!(),
+                }
+            },
+            FieldExpr::Invalid => unreachable!(),
+        }
     }
 
     pub fn codegen_expr(
@@ -150,24 +299,7 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
                 let any_res = self.codegen_call(scopes, call_expr);
                 BasicValueEnum::try_from(any_res).expect("FATAL: non basic value call used as expr")
             },
-            Expr::Primitive(primitive_expr) => match primitive_expr {
-                PrimitiveExpr::Integer(i) => {
-                    let int_type = self.ctx().i32_type();
-                    int_type.const_int(*i as u64, true).into()
-                },
-                PrimitiveExpr::Real(r) => {
-                    let float_type = self.ctx().f32_type();
-                    float_type.const_float((*r).into()).into()
-                },
-                PrimitiveExpr::String(s) => {
-                    let string = self.ctx().const_string(s.as_bytes(), true);
-                    string.into()
-                },
-                PrimitiveExpr::Char(c) => {
-                    let char_type = self.ctx().i8_type();
-                    char_type.const_int(*c as u64, false).into()
-                },
-            },
+            Expr::Primitive(primitive_expr) => self.codegen_primitive(primitive_expr),
             Expr::This => scopes.this_ptr.into(),
             Expr::ClassCast { expr, cls_id } => todo!(),
             Expr::Invalid => todo!(),
@@ -199,7 +331,35 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
         call: &CallExpr,
     ) -> AnyValueEnum<'ctx> {
         match call {
-            CallExpr::Cons { class, cons, args } => todo!(),
+            CallExpr::Cons { class, cons, args } => {
+                let args: Vec<_> = args
+                    .iter()
+                    .map(|arg| self.codegen_expr(scopes, arg))
+                    // .map(BasicMetadataValueEnum::from)
+                    .collect();
+
+                match class {
+                    ClassId::User(user_class_id) => {
+                        let cons_impl = self.impls.get(user_class_id).constructors.get(cons);
+                        let cons_func = cons_impl.func;
+
+                        let meta_args: Vec<_> =
+                            args.into_iter().map(BasicMetadataValueEnum::from).collect();
+                        let call_res = self
+                            .builder()
+                            .build_call(cons_func, &meta_args, "cons")
+                            .expect("FATAL: LLVM failed to build_call");
+                        call_res.as_any_value_enum()
+                    },
+                    ClassId::Lib(lib_class_id) => {
+                        (self.stdlib().cls_impl(lib_class_id).constructors.get(cons).call_impl)(
+                            self, &args,
+                        )
+                        .as_any_value_enum()
+                    },
+                    ClassId::Invalid => unreachable!(),
+                }
+            },
             CallExpr::Method { object, class, method, args } => {
                 let args: Vec<_> = args.iter().map(|arg| self.codegen_expr(scopes, arg)).collect();
                 let object = self.codegen_expr(scopes, object);

@@ -5,6 +5,11 @@ class Parent is
     end
 
     method Stuff2(): Integer is
+        var i: 0
+        while i.Less(value) loop
+            var a : 1
+            i := i.Plus(1)
+        end
         return value
     end
 end
@@ -13,7 +18,16 @@ class Child extends Parent is
     this() is
     end
     method Stuff2(): Integer is
-        return 1
+        var i: 0
+        while i.Less(value) loop
+            if i.Greater(4) then
+                i := i.Plus(1)
+            else
+                i := i.Plus(2)
+            end
+            
+        end
+        return value
     end
 end
 
