@@ -1,12 +1,44 @@
 use crate::{
     analyzer::{
-        model::{ConsModel, MethodModel},
+        model::{ClassModelCtx, ConsModel, MethodModel},
         registry::{ConsId, MethodId, UserClassId},
     },
-    codegen::{CodegenContext, LLVMCtx, body::ScopeStack, clsimpl::ClassImpl},
+    codegen::{CodegenContext, LLVMCtx, body::ScopeStack},
 };
 
 impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
+    pub fn codegen_init(&self, cls_id: &UserClassId) {
+        let cls_model = self.cls_models().get(cls_id);
+        let cls_impl = self.impls.get(cls_id).unwrap_object_ref();
+        let object_type = cls_impl.object_type;
+
+        let parent = cls_model.parent;
+        let parent_impl = self.get_cls_impl(&parent).unwrap_object_ref();
+
+        let this_ptr = *cls_impl.init_func.get_params().first().unwrap();
+        let body_block = self.ctx().append_basic_block(cls_impl.init_func, "body");
+        self.builder().position_at_end(body_block);
+        self.builder()
+            .build_call(parent_impl.init_func, &[this_ptr.into()], "parent_impl_call")
+            .expect("FATAL: LLVM failed to build_call");
+
+        for (field_id, field) in &cls_model.fields {
+            let field_value = self.codegen_field(field);
+            let field_ptr = self
+                .builder()
+                .build_struct_gep(
+                    object_type,
+                    this_ptr.into_pointer_value(),
+                    cls_impl.fields.get(&field_id).struct_offset,
+                    &format!("store_{field_id}"),
+                )
+                .expect("FATAL: LLVM failed to build_gep");
+            self.builder()
+                .build_store(field_ptr, field_value)
+                .expect("FATAL: LLVM failed to build_store");
+        }
+        self.builder().build_return(None).expect("FATAL: LLVM failed to build_return");
+    }
     pub fn codegen_cons(&self, cls_id: &UserClassId, cons_id: ConsId, cons: &ConsModel) {
         let cls_impl = self.impls.get(cls_id).unwrap_object_ref();
         let cons_impl = cls_impl.constructors.get(&cons_id);

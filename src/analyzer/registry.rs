@@ -138,17 +138,7 @@ impl<Id: RegistryId, V> Registry<Id, V> {
     where
         F: Fn(V, V2) -> V3,
     {
-        self.into_iter().zip(other.into_iter()).map(|((id, v), (_id, v2))| (id, f(v, v2))).collect()
-        // let t = self
-        //     .inner
-        //     .into_iter()
-        //     .zip(other.inner)
-        //     .map(|(v, v2)| match (v, v2) {
-        //         (Some(a), Some(b)) => Some(f(a, b)),
-        //         _ => None,
-        //     })
-        //     .collect();
-        // Registry { inner: t, phantom: PhantomData }
+        self.into_iter().zip(other).map(|((id, v), (_id, v2))| (id, f(v, v2))).collect()
     }
 }
 impl<Id: RegistryId, V1, V2> Registry<Id, (V1, V2)> {

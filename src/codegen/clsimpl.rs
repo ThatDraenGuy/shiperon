@@ -1,4 +1,4 @@
-use derive_more::{From, TryUnwrap, Unwrap};
+use derive_more::{From, Unwrap};
 use inkwell::{
     AddressSpace,
     types::StructType,
@@ -185,8 +185,8 @@ impl<'ctx> ClassImpl<'ctx> {
     ) -> PointerValue<'ctx> {
         match self {
             ClassImpl::Object(object_impl) => object_impl.get_field(llvm, object, field_id),
-            ClassImpl::Value(value_impl) => todo!(),
-            ClassImpl::Blanket(blanket_impl) => unreachable!(),
+            ClassImpl::Value(_value_impl) => unreachable!(),
+            ClassImpl::Blanket(_blanket_impl) => unreachable!(),
         }
     }
     pub fn call_cons(
@@ -198,7 +198,7 @@ impl<'ctx> ClassImpl<'ctx> {
         match self {
             ClassImpl::Object(object_impl) => object_impl.call_cons(llvm, cons_id, args),
             ClassImpl::Value(value_impl) => value_impl.call_cons(llvm, cons_id, args),
-            ClassImpl::Blanket(blanket_impl) => unreachable!(),
+            ClassImpl::Blanket(_blanket_impl) => unreachable!(),
         }
     }
 
@@ -214,7 +214,7 @@ impl<'ctx> ClassImpl<'ctx> {
                 object_impl.call_method(llvm, object, method_id, args)
             },
             ClassImpl::Value(value_impl) => value_impl.call_method(llvm, object, method_id, args),
-            ClassImpl::Blanket(blanket_impl) => unreachable!(),
+            ClassImpl::Blanket(_blanket_impl) => unreachable!(),
         }
     }
 }

@@ -32,7 +32,8 @@ class Child extends Parent is
 end
 
 class Program is
-    method test(child: Child) is
+    method test(parent: Parent) is
+        var child: parent as Child
         child.Stuff2()
     end
 end

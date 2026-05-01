@@ -10,7 +10,7 @@ use inkwell::{
     module::{Linkage, Module as LLVMModule},
     targets::{self, Target},
     types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, StructType},
-    values::{FunctionValue, GlobalValue, PointerValue},
+    values::FunctionValue,
 };
 use itertools::Itertools;
 
@@ -22,8 +22,8 @@ use crate::{
         field::FieldModelRegistry,
         model::{ClassModel, ClassModelCtx, ClassModelRegistry},
         registry::{
-            ClassId, ClassNameRegistry, ClassRegistry, ConsId, ConsRegistry, FieldId,
-            FieldRegistry, LibClassId, MethodId, MethodRegistry, UserClassId,
+            ClassId, ClassNameRegistry, ClassRegistry, ConsId, FieldId, LibClassId, MethodId,
+            UserClassId,
         },
         signature::{MethodSignature, ParamsSignature},
     },
@@ -411,7 +411,7 @@ impl<'ctx> ClassImplRegistry<'ctx> {
         }
         ast.cls_models()
             .iter()
-            .map(|(cls_id, _cls)| (cls_id, ready.remove(&cls_id).unwrap().into()))
+            .map(|(cls_id, _cls)| (cls_id, ready.remove(&cls_id).unwrap()))
             .collect()
     }
 }
@@ -419,6 +419,7 @@ impl<'ctx> ClassImplRegistry<'ctx> {
 pub struct StdLibImpl<'ctx> {
     impls: HashMap<LibClassId, ClassImpl<'ctx>>,
     malloc: FunctionValue<'ctx>,
+    exit: FunctionValue<'ctx>,
 }
 impl<'ctx> StdLibImpl<'ctx> {
     fn codegen(
@@ -521,6 +522,9 @@ impl<'ctx> StdLibImpl<'ctx> {
             .fn_type(&[llvm.ctx.i64_type().into()], false);
         let malloc = llvm.module.add_function("GC_malloc", malloc_type, Some(Linkage::External));
 
+        let exit_type = llvm.ctx.void_type().fn_type(&[llvm.ctx.i32_type().into()], false);
+        let exit = llvm.module.add_function("exit", exit_type, Some(Linkage::External));
+
         let mut impls = HashMap::new();
         for cls_id in [
             LibClassId::Class,
@@ -534,7 +538,7 @@ impl<'ctx> StdLibImpl<'ctx> {
             impls.insert(cls_id, class_impl);
         }
 
-        Self { impls, malloc }
+        Self { impls, malloc, exit }
     }
     pub fn get(&self, cls_id: &LibClassId) -> &ClassImpl<'ctx> {
         self.impls.get(cls_id).unwrap()
@@ -558,6 +562,7 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
 
     pub fn codegen(&self) {
         for (cls_id, cls) in self.ast.cls_models() {
+            self.codegen_init(&cls_id);
             for (cons_id, cons) in &cls.constructors {
                 self.codegen_cons(&cls_id, cons_id, cons);
             }

@@ -1,20 +1,17 @@
 use std::collections::VecDeque;
 
 use inkwell::{
-    AddressSpace,
+    AddressSpace, IntPredicate,
     basic_block::BasicBlock,
-    values::{
-        AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValueEnum, FunctionValue, PointerValue,
-    },
+    values::{AnyValue, AnyValueEnum, BasicValueEnum, FunctionValue, PointerValue},
 };
 
 use crate::{
-    StdlibCtx,
     analyzer::{
         body::{AssignTarget, Body, BodyReturn, Stmt},
         expr::{CallExpr, Expr, ExprModel, PrimitiveExpr},
         field::{FieldExpr, FieldModel},
-        registry::{ClassId, FieldId, Registry, VarId},
+        registry::{ClassId, Registry, VarId},
     },
     codegen::{
         CodegenContext, GetFieldModels, GetFieldNameCtx, GetValueType, LLVMCtx, clsimpl::ClassImpl,
@@ -55,7 +52,7 @@ impl<'ctx> ScopeStack<'ctx> {
 }
 
 impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
-    fn get_cls_impl(&self, cls_id: &ClassId) -> &ClassImpl<'ctx> {
+    pub fn get_cls_impl(&self, cls_id: &ClassId) -> &ClassImpl<'ctx> {
         match cls_id {
             ClassId::User(user_class_id) => self.impls.get(user_class_id),
             ClassId::Lib(lib_class_id) => self.stdlib_impl.get(lib_class_id),
@@ -259,8 +256,66 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
             },
             Expr::Primitive(primitive_expr) => self.codegen_primitive(primitive_expr),
             Expr::This => scopes.this_ptr.into(),
-            Expr::ClassCast { expr, cls_id } => todo!(),
-            Expr::Invalid => todo!(),
+            Expr::ClassCast { expr, cls_id } => {
+                let expr = self.codegen_expr(scopes, expr);
+                let target_impl = self.get_cls_impl(cls_id);
+                match target_impl {
+                    ClassImpl::Object(object_impl) => {
+                        let target_vtable_ptr = object_impl.vtable.as_pointer_value();
+                        let expr_vtable_ptr = self
+                            .builder()
+                            .build_load(
+                                self.ctx().ptr_type(AddressSpace::default()),
+                                expr.into_pointer_value(),
+                                "expr_vtable_ptr",
+                            )
+                            .expect("FATAL: LLVM failed to build_load")
+                            .into_pointer_value();
+                        let ptr_diff = self
+                            .builder()
+                            .build_ptr_diff(
+                                self.ctx().ptr_type(AddressSpace::default()),
+                                expr_vtable_ptr,
+                                target_vtable_ptr,
+                                "vtable_ptr_diff",
+                            )
+                            .expect("FATAL: LLVM failed to build_ptr_diff");
+                        let is_zero = self
+                            .builder()
+                            .build_int_compare(
+                                IntPredicate::EQ,
+                                ptr_diff,
+                                self.ctx().i64_type().const_int(0, false),
+                                "zero_cmp",
+                            )
+                            .expect("FATAL: LLVM failed to build_int_compare");
+                        let invalid_block =
+                            self.ctx().append_basic_block(scopes.func, "invalid_cast");
+                        let valid_block = self.ctx().append_basic_block(scopes.func, "valid_cast");
+
+                        self.builder()
+                            .build_conditional_branch(is_zero, valid_block, invalid_block)
+                            .expect("FATAL: LLVM failed to build_branch");
+
+                        self.builder().position_at_end(invalid_block);
+                        self.builder()
+                            .build_call(
+                                self.stdlib_impl.exit,
+                                &[self.ctx().i32_type().const_int(1, false).into()],
+                                "exit",
+                            )
+                            .expect("FATAL: LLVM failed to build_call");
+                        self.builder()
+                            .build_unreachable()
+                            .expect("FATAL: LLVM failed to build_unreachable");
+                        self.builder().position_at_end(valid_block);
+                        expr
+                    },
+                    ClassImpl::Value(_value_impl) => expr,
+                    ClassImpl::Blanket(_blanket_impl) => expr,
+                }
+            },
+            Expr::Invalid => unreachable!(),
         }
     }
 
