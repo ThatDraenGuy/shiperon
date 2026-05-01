@@ -3,12 +3,12 @@ use crate::{
         model::{ConsModel, MethodModel},
         registry::{ConsId, MethodId, UserClassId},
     },
-    codegen::{CodegenContext, LLVMCtx, body::ScopeStack},
+    codegen::{CodegenContext, LLVMCtx, body::ScopeStack, clsimpl::ClassImpl},
 };
 
 impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
     pub fn codegen_cons(&self, cls_id: &UserClassId, cons_id: ConsId, cons: &ConsModel) {
-        let cls_impl = self.impls.get(cls_id);
+        let cls_impl = self.impls.get(cls_id).unwrap_object_ref();
         let cons_impl = cls_impl.constructors.get(&cons_id);
         let func = cons_impl.func;
 
@@ -60,7 +60,8 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
     }
 
     pub fn codegen_method(&self, cls_id: &UserClassId, method_id: MethodId, method: &MethodModel) {
-        let method_impl = self.impls.get(cls_id).methods.get_method(&method_id);
+        let cls_impl = self.impls.get(cls_id).unwrap_object_ref();
+        let method_impl = cls_impl.methods.get_method(&method_id);
         let func = method_impl.func;
 
         let vars_block = self.ctx().append_basic_block(func, "vars");

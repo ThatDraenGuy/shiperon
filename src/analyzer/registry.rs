@@ -523,6 +523,8 @@ mod constructor {
 pub use constructor::*;
 
 mod field {
+    use std::fmt::Display;
+
     use super::{
         HasProvider, InnerRegistryId, NameRegistry, NameRegistryBuilder, Registry, RegistryBuilder,
         SimpleIdProvider,
@@ -543,6 +545,11 @@ mod field {
     }
     impl HasProvider for FieldId {
         type Provider = SimpleIdProvider<FieldId>;
+    }
+    impl Display for FieldId {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_fmt(format_args!("Field{}_", self.0))
+        }
     }
     pub type FieldNameRegistry<'key> = NameRegistry<'key, FieldId>;
     pub type FieldNameRegistryBuilder<'key, V> = NameRegistryBuilder<'key, FieldId, V>;

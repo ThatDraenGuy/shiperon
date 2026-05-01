@@ -1,4 +1,5 @@
 mod body;
+pub mod clsimpl;
 mod method;
 use std::collections::HashMap;
 
@@ -26,6 +27,11 @@ use crate::{
         },
         signature::{MethodSignature, ParamsSignature},
     },
+    codegen::clsimpl::{
+        BlanketImpl, ClassImpl, ClassImplCtx, ClassImplRegistry, ConsImpl, FieldImpl, MethodImpl,
+        ObjectImpl, ValueImpl,
+    },
+    stdlib::LibClassImpl,
 };
 
 pub struct ShipLLVMContext<'ctx> {
@@ -181,39 +187,6 @@ impl<'ctx, Ctx: LLVMCtx<'ctx>> GetValueType<'ctx> for Ctx {
     }
 }
 
-pub struct FieldImpl {
-    struct_offset: u32,
-}
-
-pub struct MethodImpl<'ctx> {
-    func: FunctionValue<'ctx>,
-    vtable_offset: u64,
-}
-
-pub struct ConsImpl<'ctx> {
-    func: FunctionValue<'ctx>,
-}
-
-pub struct ClassImpl<'ctx> {
-    object_type: StructType<'ctx>,
-    vtable_ptrs: Vec<PointerValue<'ctx>>,
-    vtable: GlobalValue<'ctx>,
-    init_func: FunctionValue<'ctx>,
-    constructors: ConsRegistry<ConsImpl<'ctx>>,
-    methods: MethodRegistry<MethodImpl<'ctx>>,
-    fields: FieldRegistry<FieldImpl>,
-}
-pub type ClassImplRegistry<'ctx> = ClassRegistry<ClassImpl<'ctx>>;
-
-pub trait ClassImplCtx<'ctx> {
-    fn impls(&self) -> &ClassImplRegistry<'ctx>;
-}
-impl<'ctx> ClassImplCtx<'ctx> for ClassImplRegistry<'ctx> {
-    fn impls(&self) -> &ClassImplRegistry<'ctx> {
-        self
-    }
-}
-
 impl<'ctx> ClassImplRegistry<'ctx> {
     fn create_method_name<'src>(
         ast: &impl ShipCtx<'src>,
@@ -306,7 +279,7 @@ impl<'ctx> ClassImplRegistry<'ctx> {
             ClassId::Invalid => unreachable!(),
         }
     }
-    fn codegen_cls_globals<'src, 'a>(
+    fn codegen_cls_impl<'src, 'a>(
         llvm: &impl LLVMCtx<'ctx>,
         ast: &impl ShipCtx<'src>,
         stdlib: &'a StdLibImpl<'ctx>,
@@ -317,7 +290,7 @@ impl<'ctx> ClassImplRegistry<'ctx> {
         let parent_impl = match &cls.parent {
             ClassId::User(user_parent) => match ready.get(user_parent) {
                 Some(parent_impl) => parent_impl,
-                None => Self::codegen_cls_globals(
+                None => Self::codegen_cls_impl(
                     llvm,
                     ast,
                     stdlib,
@@ -328,7 +301,8 @@ impl<'ctx> ClassImplRegistry<'ctx> {
             },
             ClassId::Lib(lib_class_id) => stdlib.get(lib_class_id),
             ClassId::Invalid => unreachable!(),
-        };
+        }
+        .unwrap_object_ref();
         let parent_obj_type = parent_impl.object_type;
 
         //class object struct type
@@ -372,6 +346,7 @@ impl<'ctx> ClassImplRegistry<'ctx> {
             let vtable_offset = match &method.signature.overriding {
                 Some((parent_id, parent_method_id)) => {
                     let offset = Self::get_cls_impl(stdlib, ready, parent_id)
+                        .unwrap_object_ref()
                         .methods
                         .get_method(parent_method_id)
                         .vtable_offset;
@@ -411,7 +386,7 @@ impl<'ctx> ClassImplRegistry<'ctx> {
 
         ready.insert(
             cls_id,
-            ClassImpl {
+            ObjectImpl {
                 vtable,
                 vtable_ptrs,
                 init_func,
@@ -419,7 +394,8 @@ impl<'ctx> ClassImplRegistry<'ctx> {
                 constructors,
                 methods,
                 fields,
-            },
+            }
+            .into(),
         );
         &ready[&cls_id]
     }
@@ -431,11 +407,11 @@ impl<'ctx> ClassImplRegistry<'ctx> {
     ) -> Self {
         let mut ready = HashMap::new();
         for (cls_id, cls) in ast.cls_models() {
-            Self::codegen_cls_globals(llvm, ast, stdlib, &mut ready, cls_id, cls);
+            Self::codegen_cls_impl(llvm, ast, stdlib, &mut ready, cls_id, cls);
         }
         ast.cls_models()
             .iter()
-            .map(|(cls_id, _cls)| (cls_id, ready.remove(&cls_id).unwrap()))
+            .map(|(cls_id, _cls)| (cls_id, ready.remove(&cls_id).unwrap().into()))
             .collect()
     }
 }
@@ -453,65 +429,89 @@ impl<'ctx> StdLibImpl<'ctx> {
     ) -> ClassImpl<'ctx> {
         let ClassId::Lib(parent_id) = stdlib.cls_signature(cls_id).parent else { unreachable!() };
         let lib_impl = stdlib.cls_impl(cls_id);
+        match lib_impl {
+            LibClassImpl::Object(lib_impl) => {
+                let mut struct_member_types = Vec::new();
+                if *cls_id == LibClassId::AnyRef {
+                    struct_member_types.push(llvm.ctx.ptr_type(AddressSpace::default()).into()); //vtable ptr
+                } else {
+                    let parent_obj_type = ready[&parent_id].unwrap_object_ref().object_type;
+                    struct_member_types.push(parent_obj_type.into()); //parent obj type
+                };
 
-        let mut struct_member_types = Vec::new();
-        if *cls_id == LibClassId::Class {
-            struct_member_types.push(llvm.ctx.ptr_type(AddressSpace::default()).into()); //vtable ptr
-        } else {
-            let parent_obj_type = ready[&parent_id].object_type;
-            struct_member_types.push(parent_obj_type.into()); //parent obj type
-        };
+                let fields = stdlib
+                    .cls_fields(cls_id)
+                    .registry
+                    .iter()
+                    .map(|(field_id, field)| {
+                        let field_type = llvm.get_value_type(&field.field_type);
+                        let offset = struct_member_types.len();
+                        struct_member_types.push(field_type);
+                        (field_id, FieldImpl { struct_offset: offset as u32 })
+                    })
+                    .collect();
+                let object_type = llvm.ctx.opaque_struct_type(stdlib.cls_name(cls_id));
+                object_type.set_body(&struct_member_types, true);
 
-        let fields = stdlib
-            .cls_fields(cls_id)
-            .registry
-            .iter()
-            .map(|(field_id, field)| {
-                let field_type = llvm.get_value_type(&field.field_type);
-                let offset = struct_member_types.len();
-                struct_member_types.push(field_type);
-                (field_id, FieldImpl { struct_offset: offset as u32 })
-            })
-            .collect();
-        let object_type = llvm.ctx.opaque_struct_type(stdlib.cls_name(cls_id));
-        object_type.set_body(&struct_member_types, true);
+                let constructors = lib_impl
+                    .constructors
+                    .iter()
+                    .map(|(cons_id, cons)| {
+                        let func = (cons.def_impl)(llvm);
+                        (cons_id, ConsImpl { func })
+                    })
+                    .collect();
 
-        let constructors = lib_impl
-            .constructors
-            .iter()
-            .map(|(cons_id, cons)| {
-                let func = (cons.def_impl)(llvm).unwrap();
-                (cons_id, ConsImpl { func })
-            })
-            .collect();
+                let mut vtable_ptrs = if *cls_id == LibClassId::AnyRef {
+                    Vec::new()
+                } else {
+                    ready[&parent_id].unwrap_object_ref().vtable_ptrs.clone()
+                };
+                let methods = lib_impl.methods.map_method(|_method_id, method| {
+                    let func = (method.def_impl)(llvm);
+                    let vtable_offset = vtable_ptrs.len() as u64;
+                    vtable_ptrs.push(func.as_global_value().as_pointer_value());
+                    MethodImpl { func, vtable_offset }
+                });
 
-        let mut vtable_ptrs = if *cls_id == LibClassId::Class {
-            Vec::new()
-        } else {
-            ready[&parent_id].vtable_ptrs.clone()
-        };
-        let methods = lib_impl.methods.map_method(|_method_id, method| {
-            let func = (method.def_impl)(llvm).unwrap();
-            let vtable_offset = vtable_ptrs.len() as u64;
-            vtable_ptrs.push(func.as_global_value().as_pointer_value());
-            MethodImpl { func, vtable_offset }
-        });
+                let vtable_type = llvm
+                    .ctx()
+                    .ptr_type(AddressSpace::default())
+                    .array_type(vtable_ptrs.len() as u32);
+                let vtable = llvm.module().add_global(
+                    vtable_type.as_basic_type_enum(),
+                    None,
+                    &format!("cls_{}_vtable_data", stdlib.cls_name(cls_id)),
+                );
+                vtable.set_constant(true);
+                vtable.set_initializer(
+                    &llvm.ctx().ptr_type(AddressSpace::default()).const_array(&vtable_ptrs),
+                );
 
-        let vtable_type =
-            llvm.ctx().ptr_type(AddressSpace::default()).array_type(vtable_ptrs.len() as u32);
-        let vtable = llvm.module().add_global(
-            vtable_type.as_basic_type_enum(),
-            None,
-            &format!("cls_{}_vtable_data", stdlib.cls_name(cls_id)),
-        );
-        vtable.set_constant(true);
-        vtable.set_initializer(
-            &llvm.ctx().ptr_type(AddressSpace::default()).const_array(&vtable_ptrs),
-        );
+                let init_func = (lib_impl.init_impl)(llvm);
 
-        let init_func = (lib_impl.init_impl)(llvm).unwrap();
-
-        ClassImpl { object_type, vtable_ptrs, vtable, init_func, constructors, methods, fields }
+                ObjectImpl {
+                    object_type,
+                    vtable_ptrs,
+                    vtable,
+                    init_func,
+                    constructors,
+                    methods,
+                    fields,
+                }
+                .into()
+            },
+            LibClassImpl::Value(lib_impl) => {
+                let constructors = lib_impl
+                    .constructors
+                    .iter()
+                    .map(|(cons_id, cons)| (cons_id, cons.call_impl))
+                    .collect();
+                let methods = lib_impl.methods.map_method(|_method_id, method| method.call_impl);
+                ValueImpl { methods, constructors }.into()
+            },
+            LibClassImpl::Blanket => BlanketImpl {}.into(),
+        }
     }
 
     pub fn new(llvm: &ShipLLVMContext<'ctx>, stdlib: &ShipStdLib) -> Self {
@@ -522,10 +522,17 @@ impl<'ctx> StdLibImpl<'ctx> {
         let malloc = llvm.module.add_function("GC_malloc", malloc_type, Some(Linkage::External));
 
         let mut impls = HashMap::new();
-        let class_impl = Self::codegen(llvm, stdlib, &mut impls, &LibClassId::Class);
-        impls.insert(LibClassId::Class, class_impl);
-        let anyref_impl = Self::codegen(llvm, stdlib, &mut impls, &LibClassId::AnyRef);
-        impls.insert(LibClassId::AnyRef, anyref_impl);
+        for cls_id in [
+            LibClassId::Class,
+            LibClassId::AnyRef,
+            LibClassId::AnyValue,
+            LibClassId::Integer,
+            LibClassId::Real,
+            LibClassId::Boolean,
+        ] {
+            let class_impl = Self::codegen(llvm, stdlib, &mut impls, &cls_id);
+            impls.insert(cls_id, class_impl);
+        }
 
         Self { impls, malloc }
     }
@@ -551,6 +558,9 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
 
     pub fn codegen(&self) {
         for (cls_id, cls) in self.ast.cls_models() {
+            for (cons_id, cons) in &cls.constructors {
+                self.codegen_cons(&cls_id, cons_id, cons);
+            }
             for (name_id, overloads) in &cls.methods {
                 for (overload_id, method) in overloads {
                     self.codegen_method(&cls_id, (name_id, overload_id).into(), method);

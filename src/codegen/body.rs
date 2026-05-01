@@ -16,7 +16,9 @@ use crate::{
         field::{FieldExpr, FieldModel},
         registry::{ClassId, FieldId, Registry, VarId},
     },
-    codegen::{ClassImpl, CodegenContext, GetFieldModels, GetFieldNameCtx, GetValueType, LLVMCtx},
+    codegen::{
+        CodegenContext, GetFieldModels, GetFieldNameCtx, GetValueType, LLVMCtx, clsimpl::ClassImpl,
+    },
 };
 
 type BodyScope<'ctx> = Registry<VarId, (ClassId, PointerValue<'ctx>)>;
@@ -61,26 +63,6 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
         }
     }
 
-    pub fn resolve_field(
-        &self,
-        object: BasicValueEnum<'ctx>,
-        cls_id: &ClassId,
-        field_id: &FieldId,
-    ) -> PointerValue<'ctx> {
-        let cls_impl = self.get_cls_impl(cls_id);
-        let struct_type = cls_impl.object_type;
-        let obj_ptr = object.into_pointer_value(); //TODO rework
-        let field_impl = cls_impl.fields.get(field_id);
-
-        self.builder()
-            .build_struct_gep(
-                struct_type,
-                obj_ptr,
-                field_impl.struct_offset,
-                self.field_name(cls_id, field_id),
-            )
-            .expect("FATAL: LLVM failed to build_struct_gep")
-    }
     pub fn alloc_body_vars(
         &self,
         body: &Body,
@@ -239,32 +221,8 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
         match &field.init_expr {
             FieldExpr::Primitive(primitive_expr) => self.codegen_primitive(primitive_expr),
             FieldExpr::Cons { class, cons, args } => {
-                let args: Vec<_> = args
-                    .iter()
-                    .map(|arg| self.codegen_field(arg))
-                    // .map(BasicMetadataValueEnum::from)
-                    .collect();
-
-                match class {
-                    ClassId::User(user_class_id) => {
-                        let cons_impl = self.impls.get(user_class_id).constructors.get(cons);
-                        let cons_func = cons_impl.func;
-
-                        let meta_args: Vec<_> =
-                            args.into_iter().map(BasicMetadataValueEnum::from).collect();
-                        let call_res = self
-                            .builder()
-                            .build_call(cons_func, &meta_args, "cons")
-                            .expect("FATAL: LLVM failed to build_call");
-                        call_res.try_as_basic_value().unwrap_basic()
-                    },
-                    ClassId::Lib(lib_class_id) => {
-                        (self.stdlib().cls_impl(lib_class_id).constructors.get(cons).call_impl)(
-                            self, &args,
-                        )
-                    },
-                    ClassId::Invalid => unreachable!(),
-                }
+                let args: Vec<_> = args.iter().map(|arg| self.codegen_field(arg)).collect();
+                self.get_cls_impl(class).call_cons(self, *cons, args)
             },
             FieldExpr::Invalid => unreachable!(),
         }
@@ -283,9 +241,9 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
                     .build_load(load_type, *ptr, &var_id.to_string())
                     .expect("FATAL: LLVM failed to build_load")
             },
-            Expr::FieldRead { expr, field, owner_cls } => {
+            Expr::FieldRead { expr, owner_cls, field } => {
                 let source = self.codegen_expr(scopes, expr);
-                let field_ptr = self.resolve_field(source, owner_cls, field);
+                let field_ptr = self.get_cls_impl(owner_cls).get_field(self, source, *field);
                 let field_type = self.field_models(owner_cls).get(field).field_type;
                 self.builder()
                     .build_load(
@@ -318,8 +276,7 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
             },
             AssignTarget::Field(expr, owner_cls, field) => {
                 let source = self.codegen_expr(scopes, expr);
-
-                self.resolve_field(source, owner_cls, field)
+                self.get_cls_impl(owner_cls).get_field(self, source, *field)
             },
             AssignTarget::Invalid => unreachable!(),
         }
@@ -337,89 +294,12 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
                     .map(|arg| self.codegen_expr(scopes, arg))
                     // .map(BasicMetadataValueEnum::from)
                     .collect();
-
-                match class {
-                    ClassId::User(user_class_id) => {
-                        let cons_impl = self.impls.get(user_class_id).constructors.get(cons);
-                        let cons_func = cons_impl.func;
-
-                        let meta_args: Vec<_> =
-                            args.into_iter().map(BasicMetadataValueEnum::from).collect();
-                        let call_res = self
-                            .builder()
-                            .build_call(cons_func, &meta_args, "cons")
-                            .expect("FATAL: LLVM failed to build_call");
-                        call_res.as_any_value_enum()
-                    },
-                    ClassId::Lib(lib_class_id) => {
-                        (self.stdlib().cls_impl(lib_class_id).constructors.get(cons).call_impl)(
-                            self, &args,
-                        )
-                        .as_any_value_enum()
-                    },
-                    ClassId::Invalid => unreachable!(),
-                }
+                self.get_cls_impl(class).call_cons(self, *cons, args).as_any_value_enum()
             },
             CallExpr::Method { object, class, method, args } => {
                 let args: Vec<_> = args.iter().map(|arg| self.codegen_expr(scopes, arg)).collect();
                 let object = self.codegen_expr(scopes, object);
-
-                match class {
-                    ClassId::User(user_class_id) => {
-                        let cls_impl = self.impls.get(user_class_id);
-                        let method_impl = cls_impl.methods.get_method(method);
-
-                        let vtable_ptr = self
-                            .builder()
-                            .build_load(
-                                self.ctx().ptr_type(AddressSpace::default()),
-                                object.into_pointer_value(),
-                                "vtable_ptr",
-                            )
-                            .expect("FATAL: LLVM failed to build_load");
-                        //SAFETY: vtable should be safe (:
-                        let method_ptr_ptr = unsafe {
-                            self.builder()
-                                .build_gep(
-                                    self.ctx().ptr_type(AddressSpace::default()),
-                                    vtable_ptr.into_pointer_value(),
-                                    &[self
-                                        .ctx()
-                                        .i32_type()
-                                        .const_int(method_impl.vtable_offset, false)],
-                                    "method_ptr_ptr",
-                                )
-                                .expect("FATAL: LLVM failed to build_gep")
-                        };
-                        let method_ptr = self
-                            .builder()
-                            .build_load(
-                                self.ctx().ptr_type(AddressSpace::default()),
-                                method_ptr_ptr,
-                                "method_ptr",
-                            )
-                            .expect("FATAL: LLVM failed to build_load");
-
-                        let meta_args: Vec<_> =
-                            args.into_iter().map(BasicMetadataValueEnum::from).collect();
-                        let res = self
-                            .builder()
-                            .build_indirect_call(
-                                method_impl.func.get_type(),
-                                method_ptr.into_pointer_value(),
-                                &meta_args,
-                                "call",
-                            )
-                            .expect("FATAL: LLVM failed to build_inderect_call");
-                        res.as_any_value_enum()
-                    },
-                    ClassId::Lib(lib_class_id) => {
-                        (self.stdlib().cls_impl(lib_class_id).methods.get_method(method).call_impl)(
-                            self, object, &args,
-                        )
-                    },
-                    ClassId::Invalid => unreachable!(),
-                }
+                self.get_cls_impl(class).call_method(self, object, *method, args)
             },
             CallExpr::Invalid => unreachable!(),
         }

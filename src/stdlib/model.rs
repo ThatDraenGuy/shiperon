@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use derive_more::From;
 use inkwell::{
     AddressSpace, FloatPredicate, IntPredicate,
     values::{AnyValueEnum, BasicValueEnum, FloatValue, FunctionValue, IntValue},
@@ -11,32 +12,68 @@ use crate::{
         registry::LibClassId,
         signature::{MethodSignature, ParamsSignature},
     },
-    codegen::{CodegenContext, LLVMCtx, ShipLLVMContext},
-    stdlib::{LibConsImpl, LibMethodImpl},
+    codegen::{
+        LLVMCtx,
+        clsimpl::{ValueConsImpl, ValueMethodImpl},
+    },
 };
 
-pub struct LibConsModel {
-    pub signature: ParamsSignature,
-    pub cons_impl: LibConsImpl,
+pub struct LibConsObjectImpl {
+    pub def_impl: for<'ctx> fn(&dyn LLVMCtx<'ctx>) -> FunctionValue<'ctx>,
 }
-
-pub struct LibMethodModel {
-    pub signature: MethodSignature,
-    pub method_impl: LibMethodImpl,
+pub struct LibMethodObjectImpl {
+    pub def_impl: for<'ctx> fn(&dyn LLVMCtx<'ctx>) -> FunctionValue<'ctx>,
 }
-
-pub struct LibClassModel {
+pub struct LibObjectModel {
     pub id: LibClassId,
     pub parent: LibClassId,
-    pub init_impl: for<'ctx> fn(&ShipLLVMContext<'ctx>) -> Option<FunctionValue<'ctx>>,
-    pub constructors: Vec<LibConsModel>,
-    pub methods: HashMap<&'static str, Vec<LibMethodModel>>,
+    pub init_impl: for<'ctx> fn(&dyn LLVMCtx<'ctx>) -> FunctionValue<'ctx>,
+    pub constructors: Vec<(ParamsSignature, LibConsObjectImpl)>,
+    pub methods: HashMap<&'static str, Vec<(MethodSignature, LibMethodObjectImpl)>>,
     pub fields: HashMap<&'static str, FieldModel>,
 }
 
-fn int_compare<'ctx, 'src>(
+pub struct LibConsValueImpl {
+    pub call_impl: ValueConsImpl,
+}
+pub struct LibMethodValueImpl {
+    pub call_impl: ValueMethodImpl,
+}
+pub struct LibValueModel {
+    pub id: LibClassId,
+    pub parent: LibClassId,
+    pub constructors: Vec<(ParamsSignature, LibConsValueImpl)>,
+    pub methods: HashMap<&'static str, Vec<(MethodSignature, LibMethodValueImpl)>>,
+    pub fields: HashMap<&'static str, FieldModel>,
+}
+
+pub struct LibBlanketModel {
+    pub id: LibClassId,
+    pub parent: LibClassId,
+    pub constructors: Vec<ParamsSignature>,
+    pub methods: HashMap<&'static str, Vec<MethodSignature>>,
+    pub fields: HashMap<&'static str, FieldModel>,
+}
+
+#[derive(From)]
+pub enum LibClassModel {
+    Object(LibObjectModel),
+    Value(LibValueModel),
+    Blanket(LibBlanketModel),
+}
+impl LibClassModel {
+    pub fn id(&self) -> LibClassId {
+        match self {
+            LibClassModel::Object(lib_object_model) => lib_object_model.id,
+            LibClassModel::Value(lib_value_model) => lib_value_model.id,
+            LibClassModel::Blanket(lib_blanket_model) => lib_blanket_model.id,
+        }
+    }
+}
+
+fn int_compare<'ctx>(
     predicate: IntPredicate,
-    ctx: &CodegenContext<'ctx, 'src>,
+    ctx: &dyn LLVMCtx<'ctx>,
     object: BasicValueEnum<'ctx>,
     args: &[BasicValueEnum<'ctx>],
 ) -> AnyValueEnum<'ctx> {
@@ -52,27 +89,21 @@ fn int_compare<'ctx, 'src>(
         .into()
 }
 
-fn int_to_float<'ctx, 'src>(
-    ctx: &CodegenContext<'ctx, 'src>,
-    i: IntValue<'ctx>,
-) -> FloatValue<'ctx> {
+fn int_to_float<'ctx>(ctx: &dyn LLVMCtx<'ctx>, i: IntValue<'ctx>) -> FloatValue<'ctx> {
     ctx.builder()
         .build_signed_int_to_float(i, ctx.ctx().f32_type(), "ToReal")
         .expect("FATAL: LLVM failed to build_sitf")
 }
 
-fn float_to_int<'ctx, 'src>(
-    ctx: &CodegenContext<'ctx, 'src>,
-    f: FloatValue<'ctx>,
-) -> IntValue<'ctx> {
+fn float_to_int<'ctx>(ctx: &dyn LLVMCtx<'ctx>, f: FloatValue<'ctx>) -> IntValue<'ctx> {
     ctx.builder()
         .build_float_to_signed_int(f, ctx.ctx().i32_type(), "ToInteger")
         .expect("FATAL: LLVM failed to build_ftsi")
 }
 
-fn float_compare<'ctx, 'src>(
+fn float_compare<'ctx>(
     predicate: FloatPredicate,
-    ctx: &CodegenContext<'ctx, 'src>,
+    ctx: &dyn LLVMCtx<'ctx>,
     object: BasicValueEnum<'ctx>,
     args: &[BasicValueEnum<'ctx>],
 ) -> AnyValueEnum<'ctx> {
@@ -92,145 +123,125 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
     let mut hashmap = HashMap::new();
     hashmap.insert(
         "Class",
-        LibClassModel {
+        LibBlanketModel {
             id: LibClassId::Class,
             parent: LibClassId::Class,
-            init_impl: |ctx| None,
-            constructors: vec![LibConsModel {
-                signature: ParamsSignature::empty(),
-                cons_impl: LibConsImpl {
-                    call_impl: |ctx, args| unreachable!(),
-                    def_impl: |ctx| None,
-                },
-            }],
+            constructors: vec![],
             methods: HashMap::new(),
             fields: HashMap::new(),
-        },
+        }
+        .into(),
     );
 
     hashmap.insert(
         "AnyRef",
-        LibClassModel {
+        LibObjectModel {
             id: LibClassId::AnyRef,
             parent: LibClassId::Class,
-            init_impl: |ctx| None,
-            constructors: vec![LibConsModel {
-                signature: ParamsSignature::empty(),
-                cons_impl: LibConsImpl {
-                    call_impl: |ctx, args| unreachable!(),
-                    def_impl: |ctx| None,
+            init_impl: |ctx| {
+                let func_type = ctx
+                    .ctx()
+                    .void_type()
+                    .fn_type(&[ctx.ctx().ptr_type(AddressSpace::default()).into()], false);
+                ctx.module().add_function("cls_AnyRef_init", func_type, None)
+            },
+            constructors: vec![(
+                ParamsSignature::empty(),
+                LibConsObjectImpl {
+                    def_impl: |ctx| {
+                        let func_type = ctx
+                            .ctx()
+                            .void_type()
+                            .fn_type(&[ctx.ctx().ptr_type(AddressSpace::default()).into()], false);
+                        ctx.module().add_function("cls_AnyRef_cons_args_", func_type, None)
+                    },
                 },
-            }],
+            )],
             methods: HashMap::from([(
                 "ToString",
-                vec![LibMethodModel {
-                    signature: MethodSignature {
+                vec![(
+                    MethodSignature {
                         params: ParamsSignature::empty(),
                         return_type: Some(LibClassId::String.into()),
                         overriding: None,
                     },
-                    method_impl: LibMethodImpl {
-                        call_impl: |ctx, object, args| todo!(),
+                    LibMethodObjectImpl {
                         def_impl: |llvm| {
                             let func_type = llvm.ctx().ptr_type(AddressSpace::default()).fn_type(
                                 &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
                                 false,
                             );
-                            Some(llvm.module().add_function(
+                            llvm.module().add_function(
                                 "cls_AnyRef_method_ToString_args_",
                                 func_type,
                                 None,
-                            ))
+                            )
                         },
                     },
-                }],
+                )],
             )]),
             fields: HashMap::new(),
-        },
+        }
+        .into(),
     );
 
     hashmap.insert(
         "AnyValue",
-        LibClassModel {
+        LibBlanketModel {
             id: LibClassId::AnyValue,
             parent: LibClassId::Class,
-            init_impl: |ctx| None,
-            constructors: vec![LibConsModel {
-                signature: ParamsSignature::empty(),
-                cons_impl: LibConsImpl {
-                    call_impl: |ctx, args| unreachable!(),
-                    def_impl: |ctx| None,
-                },
-            }],
-            methods: HashMap::from([(
-                "ToString",
-                vec![LibMethodModel {
-                    signature: MethodSignature {
-                        params: ParamsSignature::empty(),
-                        return_type: Some(LibClassId::String.into()),
-                        overriding: None,
-                    },
-                    method_impl: LibMethodImpl {
-                        call_impl: |ctx, object, args| todo!(),
-                        def_impl: |ctx| None,
-                    },
-                }],
-            )]),
+            constructors: vec![],
+            methods: HashMap::new(),
             fields: HashMap::new(),
-        },
+        }
+        .into(),
     );
 
     hashmap.insert(
         "Integer",
-        LibClassModel {
+        LibValueModel {
             id: LibClassId::Integer,
             parent: LibClassId::AnyValue,
-            init_impl: |ctx| None,
             constructors: vec![
-                LibConsModel {
-                    signature: ParamsSignature::new(vec![LibClassId::Integer.into()]),
-                    cons_impl: LibConsImpl {
-                        call_impl: |ctx, args| *args.first().unwrap(),
-                        def_impl: |ctx| None,
-                    },
-                },
-                LibConsModel {
-                    signature: ParamsSignature::new(vec![LibClassId::Real.into()]),
-                    cons_impl: LibConsImpl {
+                (
+                    ParamsSignature::new(vec![LibClassId::Integer.into()]),
+                    LibConsValueImpl { call_impl: |ctx, args| *args.first().unwrap() },
+                ),
+                (
+                    ParamsSignature::new(vec![LibClassId::Real.into()]),
+                    LibConsValueImpl {
                         call_impl: |ctx, args| {
                             let f = args.first().unwrap();
                             float_to_int(ctx, f.into_float_value()).into()
                         },
-                        def_impl: |ctx| None,
                     },
-                },
+                ),
             ],
             methods: HashMap::from([
                 (
                     "ToReal",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::Real.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 int_to_float(ctx, object.into_int_value()).into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "ToBoolean",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::Boolean.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 let i = object.into_int_value();
                                 ctx.builder()
@@ -238,19 +249,18 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_int_cast")
                                     .into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "ToChar",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::Char.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 let i = object.into_int_value();
                                 ctx.builder()
@@ -258,19 +268,18 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_int_cast")
                                     .into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "UnaryMinus",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::Integer.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 let i = object.into_int_value();
                                 ctx.builder()
@@ -278,20 +287,19 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_int_neg")
                                     .into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "Plus",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Integer.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_int_value();
                                     let right =
@@ -301,16 +309,15 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_int_add")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let i = object.into_int_value();
                                     let left = int_to_float(ctx, object.into_int_value());
@@ -321,21 +328,20 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_add")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Minus",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Integer.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_int_value();
                                     let right =
@@ -345,16 +351,15 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_int_sub")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let i = object.into_int_value();
                                     let left = int_to_float(ctx, object.into_int_value());
@@ -365,21 +370,20 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_sub")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Mult",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Integer.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_int_value();
                                     let right =
@@ -389,16 +393,15 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_int_mul")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let i = object.into_int_value();
                                     let left = int_to_float(ctx, object.into_int_value());
@@ -409,21 +412,20 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_mul")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Div",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Integer.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_int_value();
                                     let right =
@@ -433,16 +435,15 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_int_div")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = int_to_float(ctx, object.into_int_value());
                                     let right =
@@ -452,20 +453,19 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_div")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Rem",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                             return_type: Some(LibClassId::Integer.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 let left = object.into_int_value();
                                 let right = args.first().expect("FATAL: no args").into_int_value();
@@ -474,33 +474,31 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_int_rem")
                                     .into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "Less",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     int_compare(IntPredicate::SLT, ctx, object, args)
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     float_compare(
                                         FloatPredicate::OLT,
@@ -509,34 +507,32 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         args,
                                     )
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "LessEqual",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     int_compare(IntPredicate::SLE, ctx, object, args)
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     float_compare(
                                         FloatPredicate::OLE,
@@ -545,34 +541,32 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         args,
                                     )
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Greater",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     int_compare(IntPredicate::SGT, ctx, object, args)
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     float_compare(
                                         FloatPredicate::OGT,
@@ -581,34 +575,32 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         args,
                                     )
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "GreaterEqual",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     int_compare(IntPredicate::SGE, ctx, object, args)
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     float_compare(
                                         FloatPredicate::OGE,
@@ -617,34 +609,32 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         args,
                                     )
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Equal",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     int_compare(IntPredicate::EQ, ctx, object, args)
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     float_compare(
                                         FloatPredicate::OEQ,
@@ -653,67 +643,61 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         args,
                                     )
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
             ]),
             fields: HashMap::new(),
-        },
+        }
+        .into(),
     );
 
     hashmap.insert(
         "Real",
-        LibClassModel {
+        LibValueModel {
             id: LibClassId::Real,
             parent: LibClassId::AnyValue,
-            init_impl: |ctx| None,
             constructors: vec![
-                LibConsModel {
-                    signature: ParamsSignature::new(vec![LibClassId::Real.into()]),
-                    cons_impl: LibConsImpl {
-                        call_impl: |ctx, args| *args.first().unwrap(),
-                        def_impl: |ctx| None,
-                    },
-                },
-                LibConsModel {
-                    signature: ParamsSignature::new(vec![LibClassId::Integer.into()]),
-                    cons_impl: LibConsImpl {
+                (
+                    ParamsSignature::new(vec![LibClassId::Real.into()]),
+                    LibConsValueImpl { call_impl: |ctx, args| *args.first().unwrap() },
+                ),
+                (
+                    ParamsSignature::new(vec![LibClassId::Integer.into()]),
+                    LibConsValueImpl {
                         call_impl: |ctx, args| {
                             let f = args.first().unwrap();
                             int_to_float(ctx, f.into_int_value()).into()
                         },
-                        def_impl: |ctx| None,
                     },
-                },
+                ),
             ],
             methods: HashMap::from([
                 (
                     "ToInteger",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::Integer.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 float_to_int(ctx, object.into_float_value()).into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "UnaryMinus",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::Real.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 let f = object.into_float_value();
                                 ctx.builder()
@@ -721,20 +705,19 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_float_neg")
                                     .into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "Plus",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_float_value();
                                     let right =
@@ -744,16 +727,15 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_add")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_float_value();
                                     let i = args.first().expect("FATAL: no args").into_int_value();
@@ -763,21 +745,20 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_add")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Minus",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_float_value();
                                     let right =
@@ -787,16 +768,15 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_sub")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_float_value();
                                     let i = args.first().expect("FATAL: no args").into_int_value();
@@ -806,21 +786,20 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_sub")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Mult",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_float_value();
                                     let right =
@@ -830,16 +809,15 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_mul")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_float_value();
                                     let i = args.first().expect("FATAL: no args").into_int_value();
@@ -849,21 +827,20 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_mul")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Div",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_float_value();
                                     let right =
@@ -873,16 +850,15 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_div")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Real.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let left = object.into_float_value();
                                     let i = args.first().expect("FATAL: no args").into_int_value();
@@ -892,20 +868,19 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                         .expect("FATAL: LLVM failed to build_float_div")
                                         .into()
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Rem",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                             return_type: Some(LibClassId::Real.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 let left = object.into_float_value();
                                 let i = args.first().expect("FATAL: no args").into_int_value();
@@ -915,33 +890,31 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_float_rem")
                                     .into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "Less",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     float_compare(FloatPredicate::OLT, ctx, object, args)
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let right = int_to_float(
                                         ctx,
@@ -949,34 +922,32 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     );
                                     float_compare(FloatPredicate::OLT, ctx, object, &[right.into()])
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "LessEqual",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     float_compare(FloatPredicate::OLE, ctx, object, args)
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let right = int_to_float(
                                         ctx,
@@ -984,34 +955,32 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     );
                                     float_compare(FloatPredicate::OLE, ctx, object, &[right.into()])
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Greater",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     float_compare(FloatPredicate::OGT, ctx, object, args)
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let right = int_to_float(
                                         ctx,
@@ -1019,34 +988,32 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     );
                                     float_compare(FloatPredicate::OGT, ctx, object, &[right.into()])
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "GreaterEqual",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     float_compare(FloatPredicate::OGE, ctx, object, args)
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let right = int_to_float(
                                         ctx,
@@ -1054,34 +1021,32 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     );
                                     float_compare(FloatPredicate::OGE, ctx, object, &[right.into()])
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
                 (
                     "Equal",
                     vec![
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Real.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     float_compare(FloatPredicate::OEQ, ctx, object, args)
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
-                        LibMethodModel {
-                            signature: MethodSignature {
+                        ),
+                        (
+                            MethodSignature {
                                 params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                                 return_type: Some(LibClassId::Boolean.into()),
                                 overriding: None,
                             },
-                            method_impl: LibMethodImpl {
+                            LibMethodValueImpl {
                                 call_impl: |ctx, object, args| {
                                     let right = int_to_float(
                                         ctx,
@@ -1089,39 +1054,35 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     );
                                     float_compare(FloatPredicate::OEQ, ctx, object, &[right.into()])
                                 },
-                                def_impl: |ctx| None,
                             },
-                        },
+                        ),
                     ],
                 ),
             ]),
             fields: HashMap::new(),
-        },
+        }
+        .into(),
     );
 
     hashmap.insert(
         "Boolean",
-        LibClassModel {
+        LibValueModel {
             id: LibClassId::Boolean,
             parent: LibClassId::AnyValue,
-            init_impl: |ctx| None,
-            constructors: vec![LibConsModel {
-                signature: ParamsSignature::new(vec![LibClassId::Boolean.into()]),
-                cons_impl: LibConsImpl {
-                    call_impl: |ctx, args| *args.first().unwrap(),
-                    def_impl: |ctx| None,
-                },
-            }],
+            constructors: vec![(
+                ParamsSignature::new(vec![LibClassId::Boolean.into()]),
+                LibConsValueImpl { call_impl: |ctx, args| *args.first().unwrap() },
+            )],
             methods: HashMap::from([
                 (
                     "toInteger",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::Integer.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 let b = object.into_int_value();
                                 ctx.builder()
@@ -1129,19 +1090,18 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_int_cast")
                                     .into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "Or",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::new(vec![LibClassId::Boolean.into()]),
                             return_type: Some(LibClassId::Boolean.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 let left = object.into_int_value();
                                 let right = args.first().expect("FATAL: no args").into_int_value();
@@ -1150,19 +1110,18 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_or")
                                     .into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "And",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::new(vec![LibClassId::Boolean.into()]),
                             return_type: Some(LibClassId::Boolean.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 let left = object.into_int_value();
                                 let right = args.first().expect("FATAL: no args").into_int_value();
@@ -1171,19 +1130,18 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_and")
                                     .into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "Xor",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::new(vec![LibClassId::Boolean.into()]),
                             return_type: Some(LibClassId::Boolean.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 let left = object.into_int_value();
                                 let right = args.first().expect("FATAL: no args").into_int_value();
@@ -1192,19 +1150,18 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_xor")
                                     .into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
                 (
                     "Not",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::Boolean.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
+                        LibMethodValueImpl {
                             call_impl: |ctx, object, args| {
                                 let b = object.into_int_value();
                                 ctx.builder()
@@ -1212,72 +1169,63 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     .expect("FATAL: LLVM failed to build_not")
                                     .into()
                             },
-                            def_impl: |ctx| None,
                         },
-                    }],
+                    )],
                 ),
             ]),
             fields: HashMap::new(),
-        },
+        }
+        .into(),
     );
 
     hashmap.insert(
         "Array",
-        LibClassModel {
+        LibObjectModel {
             id: LibClassId::Array,
             parent: LibClassId::AnyRef,
             init_impl: |ctx| todo!(),
-            constructors: vec![LibConsModel {
-                signature: ParamsSignature::new(vec![LibClassId::Integer.into()]),
-                cons_impl: LibConsImpl { call_impl: |ctx, args| todo!(), def_impl: |ctx| todo!() },
-            }],
+            constructors: vec![(
+                ParamsSignature::new(vec![LibClassId::Integer.into()]),
+                LibConsObjectImpl { def_impl: |ctx| todo!() },
+            )],
             methods: HashMap::from([
                 (
                     "toList",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::List.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
-                            call_impl: |ctx, object, args| todo!(),
-                            def_impl: |ctx| todo!(),
-                        },
-                    }],
+                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                    )],
                 ),
                 (
                     "Length",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::Integer.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
-                            call_impl: |ctx, object, args| todo!(),
-                            def_impl: |ctx| todo!(),
-                        },
-                    }],
+                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                    )],
                 ),
                 (
                     "Get",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::new(vec![LibClassId::Integer.into()]),
                             return_type: Some(LibClassId::AnyRef.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
-                            call_impl: |ctx, object, args| todo!(),
-                            def_impl: |ctx| todo!(),
-                        },
-                    }],
+                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                    )],
                 ),
                 (
                     "Set",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::new(vec![
                                 LibClassId::Integer.into(),
                                 LibClassId::AnyRef.into(),
@@ -1285,95 +1233,73 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                             return_type: None,
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
-                            call_impl: |ctx, object, args| todo!(),
-                            def_impl: |ctx| todo!(),
-                        },
-                    }],
+                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                    )],
                 ),
             ]),
             fields: HashMap::new(),
-        },
+        }
+        .into(),
     );
 
     hashmap.insert(
         "List",
-        LibClassModel {
+        LibObjectModel {
             id: LibClassId::List,
             parent: LibClassId::AnyRef,
             init_impl: |ctx| todo!(),
             constructors: vec![
-                LibConsModel {
-                    signature: ParamsSignature::empty(),
-                    cons_impl: LibConsImpl {
-                        call_impl: |ctx, args| todo!(),
-                        def_impl: |ctx| todo!(),
-                    },
-                },
-                LibConsModel {
-                    signature: ParamsSignature::new(vec![LibClassId::AnyRef.into()]),
-                    cons_impl: LibConsImpl {
-                        call_impl: |ctx, args| todo!(),
-                        def_impl: |ctx| todo!(),
-                    },
-                },
-                LibConsModel {
-                    signature: ParamsSignature::new(vec![
+                (ParamsSignature::empty(), LibConsObjectImpl { def_impl: |ctx| todo!() }),
+                (
+                    ParamsSignature::new(vec![LibClassId::AnyRef.into()]),
+                    LibConsObjectImpl { def_impl: |ctx| todo!() },
+                ),
+                (
+                    ParamsSignature::new(vec![
                         LibClassId::AnyRef.into(),
                         LibClassId::Integer.into(),
                     ]),
-                    cons_impl: LibConsImpl {
-                        call_impl: |ctx, args| todo!(),
-                        def_impl: |ctx| todo!(),
-                    },
-                },
+                    LibConsObjectImpl { def_impl: |ctx| todo!() },
+                ),
             ],
             methods: HashMap::from([
                 (
                     "Append",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::new(vec![LibClassId::AnyRef.into()]),
                             return_type: Some(LibClassId::List.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
-                            call_impl: |ctx, object, args| todo!(),
-                            def_impl: |ctx| todo!(),
-                        },
-                    }],
+                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                    )],
                 ),
                 (
                     "Head",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::AnyRef.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
-                            call_impl: |ctx, object, args| todo!(),
-                            def_impl: |ctx| todo!(),
-                        },
-                    }],
+                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                    )],
                 ),
                 (
                     "Tail",
-                    vec![LibMethodModel {
-                        signature: MethodSignature {
+                    vec![(
+                        MethodSignature {
                             params: ParamsSignature::empty(),
                             return_type: Some(LibClassId::List.into()),
                             overriding: None,
                         },
-                        method_impl: LibMethodImpl {
-                            call_impl: |ctx, object, args| todo!(),
-                            def_impl: |ctx| todo!(),
-                        },
-                    }],
+                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                    )],
                 ),
             ]),
             fields: HashMap::new(),
-        },
+        }
+        .into(),
     );
 
     //TODO char+string

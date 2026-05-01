@@ -2,7 +2,8 @@ mod model;
 
 use std::collections::HashMap;
 
-use inkwell::values::{AnyValueEnum, BasicValueEnum, FunctionValue};
+use derive_more::{From, Unwrap};
+use inkwell::values::FunctionValue;
 
 use crate::{
     analyzer::{
@@ -14,31 +15,30 @@ use crate::{
         },
         signature::ClassSignature,
     },
-    codegen::{CodegenContext, ShipLLVMContext},
-    stdlib::model::{LibClassModel, models},
+    codegen::LLVMCtx,
+    stdlib::model::{
+        LibClassModel, LibConsObjectImpl, LibConsValueImpl, LibMethodObjectImpl,
+        LibMethodValueImpl, models,
+    },
 };
 
-pub struct LibConsImpl {
-    pub call_impl: for<'ctx, 'src> fn(
-        ctx: &CodegenContext<'ctx, 'src>,
-        args: &[BasicValueEnum<'ctx>],
-    ) -> BasicValueEnum<'ctx>,
-    pub def_impl: for<'ctx> fn(&ShipLLVMContext<'ctx>) -> Option<FunctionValue<'ctx>>,
+pub struct LibObjectImpl {
+    pub init_impl: for<'ctx> fn(&dyn LLVMCtx<'ctx>) -> FunctionValue<'ctx>,
+    pub constructors: ConsRegistry<LibConsObjectImpl>,
+    pub methods: MethodRegistry<LibMethodObjectImpl>,
 }
 
-pub struct LibMethodImpl {
-    pub call_impl: for<'ctx, 'src> fn(
-        ctx: &CodegenContext<'ctx, 'src>,
-        object: BasicValueEnum<'ctx>,
-        args: &[BasicValueEnum<'ctx>],
-    ) -> AnyValueEnum<'ctx>,
-    pub def_impl: for<'ctx> fn(&ShipLLVMContext<'ctx>) -> Option<FunctionValue<'ctx>>,
+pub struct LibValueImpl {
+    pub constructors: ConsRegistry<LibConsValueImpl>,
+    pub methods: MethodRegistry<LibMethodValueImpl>,
 }
 
-pub struct LibClassImpl {
-    pub init_impl: for<'ctx> fn(&ShipLLVMContext<'ctx>) -> Option<FunctionValue<'ctx>>,
-    pub constructors: ConsRegistry<LibConsImpl>,
-    pub methods: MethodRegistry<LibMethodImpl>,
+#[derive(From, Unwrap)]
+#[unwrap(ref)]
+pub enum LibClassImpl {
+    Object(LibObjectImpl),
+    Value(LibValueImpl),
+    Blanket,
 }
 
 pub struct ShipStdLib {
@@ -99,48 +99,125 @@ impl StdlibCtx for ShipStdLib {
 fn process_model(
     model: LibClassModel,
 ) -> (ClassSignature, ClassFields, ClassMemberNames<'static>, LibClassImpl) {
-    let mut cons_builder = RegistryBuilder::default();
-    for cons in model.constructors {
-        cons_builder.insert((cons.signature, cons.cons_impl));
-    }
-    let (cons_signatures, cons_impls) = cons_builder.build().split();
+    match model {
+        LibClassModel::Object(model) => {
+            let mut cons_builder = RegistryBuilder::default();
+            for cons in model.constructors {
+                cons_builder.insert(cons);
+            }
+            let (cons_signatures, cons_impls) = cons_builder.build().split();
 
-    let mut method_builder = NameRegistryBuilder::default();
-    for (name, overlaods) in model.methods {
-        let mut overload_builder = RegistryBuilder::default();
-        for lib_model in overlaods {
-            overload_builder.insert((lib_model.signature, lib_model.method_impl));
-        }
-        let _ = method_builder.insert(name, overload_builder.build().split());
-    }
-    let (method_names, methods) = method_builder.build();
-    let (method_signatures, method_impls) = methods.split();
+            let mut method_builder = NameRegistryBuilder::default();
+            for (name, overlaods) in model.methods {
+                let mut overload_builder = RegistryBuilder::default();
+                for lib_model in overlaods {
+                    overload_builder.insert(lib_model);
+                }
+                let _ = method_builder.insert(name, overload_builder.build().split());
+            }
+            let (method_names, methods) = method_builder.build();
+            let (method_signatures, method_impls) = methods.split();
 
-    let mut field_builder = NameRegistryBuilder::default();
-    for (name, field) in model.fields {
-        let _ = field_builder.insert(name, field);
-    }
-    let (field_names, fields) = field_builder.build();
+            let mut field_builder = NameRegistryBuilder::default();
+            for (name, field) in model.fields {
+                let _ = field_builder.insert(name, field);
+            }
+            let (field_names, fields) = field_builder.build();
 
-    (
-        ClassSignature {
-            id: model.id.into(),
-            parent: model.parent.into(),
-            constructors: cons_signatures,
-            methods: method_signatures,
+            (
+                ClassSignature {
+                    id: model.id.into(),
+                    parent: model.parent.into(),
+                    constructors: cons_signatures,
+                    methods: method_signatures,
+                },
+                ClassFields { registry: fields },
+                ClassMemberNames { methods: method_names, fields: field_names },
+                LibObjectImpl {
+                    init_impl: model.init_impl,
+                    methods: method_impls,
+                    constructors: cons_impls,
+                }
+                .into(),
+            )
         },
-        ClassFields { registry: fields },
-        ClassMemberNames { methods: method_names, fields: field_names },
-        LibClassImpl {
-            init_impl: model.init_impl,
-            methods: method_impls,
-            constructors: cons_impls,
+        LibClassModel::Value(model) => {
+            let mut cons_builder = RegistryBuilder::default();
+            for cons in model.constructors {
+                cons_builder.insert(cons);
+            }
+            let (cons_signatures, cons_impls) = cons_builder.build().split();
+
+            let mut method_builder = NameRegistryBuilder::default();
+            for (name, overlaods) in model.methods {
+                let mut overload_builder = RegistryBuilder::default();
+                for lib_model in overlaods {
+                    overload_builder.insert(lib_model);
+                }
+                let _ = method_builder.insert(name, overload_builder.build().split());
+            }
+            let (method_names, methods) = method_builder.build();
+            let (method_signatures, method_impls) = methods.split();
+
+            let mut field_builder = NameRegistryBuilder::default();
+            for (name, field) in model.fields {
+                let _ = field_builder.insert(name, field);
+            }
+            let (field_names, fields) = field_builder.build();
+
+            (
+                ClassSignature {
+                    id: model.id.into(),
+                    parent: model.parent.into(),
+                    constructors: cons_signatures,
+                    methods: method_signatures,
+                },
+                ClassFields { registry: fields },
+                ClassMemberNames { methods: method_names, fields: field_names },
+                LibValueImpl { methods: method_impls, constructors: cons_impls }.into(),
+            )
         },
-    )
+        LibClassModel::Blanket(model) => {
+            let mut cons_builder = RegistryBuilder::default();
+            for cons in model.constructors {
+                cons_builder.insert(cons);
+            }
+            let cons_signatures = cons_builder.build();
+
+            let mut method_builder = NameRegistryBuilder::default();
+            for (name, overlaods) in model.methods {
+                let mut overload_builder = RegistryBuilder::default();
+                for lib_model in overlaods {
+                    overload_builder.insert(lib_model);
+                }
+                let _ = method_builder.insert(name, overload_builder.build());
+            }
+            let (method_names, methods) = method_builder.build();
+            let method_signatures = methods;
+
+            let mut field_builder = NameRegistryBuilder::default();
+            for (name, field) in model.fields {
+                let _ = field_builder.insert(name, field);
+            }
+            let (field_names, fields) = field_builder.build();
+
+            (
+                ClassSignature {
+                    id: model.id.into(),
+                    parent: model.parent.into(),
+                    constructors: cons_signatures,
+                    methods: method_signatures,
+                },
+                ClassFields { registry: fields },
+                ClassMemberNames { methods: method_names, fields: field_names },
+                LibClassImpl::Blanket,
+            )
+        },
+    }
 }
 
 pub fn stdlib() -> ShipStdLib {
-    let inner = models().into_values().map(|model| (model.id, process_model(model))).collect();
+    let inner = models().into_values().map(|model| (model.id(), process_model(model))).collect();
 
     ShipStdLib {
         inner,
