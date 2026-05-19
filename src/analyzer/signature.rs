@@ -229,11 +229,14 @@ impl<'src, Ctx: StdlibCtx + ClassSignatureCtx + ClassMemberNamesCtx<'src>>
         let signature = self.get_cls_signature(&cls_id);
         let methods = &signature.methods;
 
-        let name_id = self
-            .get_member_names(&cls_id)
-            .methods
-            .get_by_name(name)
-            .ok_or(MethodError::UndefinedMethod { name: name_node.clone() })?; //TODO fix!!!
+        let Some(name_id) = self.get_member_names(&cls_id).methods.get_by_name(name) else {
+            let parent = signature.parent;
+            if parent == LibClassId::Class.into() || parent == ClassId::Invalid {
+                return Err(MethodError::UndefinedMethod { name: name_node.clone() });
+            } else {
+                return self.find_matching_method(parent, name, param_types, name_node, args_node);
+            }
+        };
 
         methods
             .get(&name_id)
