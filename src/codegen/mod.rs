@@ -1,7 +1,7 @@
 mod body;
 pub mod clsimpl;
 mod method;
-use std::collections::HashMap;
+use std::{collections::HashMap, error::Error, path::Path};
 
 use inkwell::{
     AddressSpace,
@@ -243,15 +243,11 @@ impl<'ctx> ClassImplRegistry<'ctx> {
         signature: &ParamsSignature,
         cons_name: &str,
     ) -> FunctionValue<'ctx> {
-        let mut params: Vec<_> = signature
+        let params: Vec<_> = signature
             .param_types
             .iter()
             .map(|param_type| BasicMetadataTypeEnum::from(llvm.get_value_type(param_type)))
             .collect();
-        params.insert(
-            0,
-            BasicMetadataTypeEnum::PointerType(llvm.ctx().ptr_type(AddressSpace::default())), //ptr to self
-        );
         let func_type = llvm.ctx().ptr_type(AddressSpace::default()).fn_type(&params, false);
         llvm.module().add_function(cons_name, func_type, None)
     }
@@ -533,6 +529,7 @@ impl<'ctx> StdLibImpl<'ctx> {
             LibClassId::Integer,
             LibClassId::Real,
             LibClassId::Boolean,
+            LibClassId::Array,
         ] {
             let class_impl = Self::codegen(llvm, stdlib, &mut impls, &cls_id);
             impls.insert(cls_id, class_impl);
@@ -575,7 +572,7 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
     }
 }
 
-pub fn compile<'src>(ast: ShipContext<'src>) {
+pub fn compile<'src>(ast: ShipContext<'src>, output: &Path) -> Result<(), Box<dyn Error>> {
     let target_config = targets::InitializationConfig::default();
     Target::initialize_native(&target_config).expect("Failed to initialize native machine target!");
 
@@ -584,5 +581,7 @@ pub fn compile<'src>(ast: ShipContext<'src>) {
 
     let codegen = CodegenContext::new(ast, &ctx);
     codegen.codegen();
+    codegen.llvm.module.print_to_file(output)?;
     println!("{}", codegen.llvm.module.print_to_string().to_string());
+    Ok(())
 }

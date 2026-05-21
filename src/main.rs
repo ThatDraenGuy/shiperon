@@ -1,4 +1,4 @@
-use std::{error::Error, fs::read_to_string};
+use std::{error::Error, fs::read_to_string, path::Path};
 
 use clap::{Parser, ValueEnum};
 use ron::ser::PrettyConfig;
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("{config:?}");
 
     let input = read_to_string(&args.src)?;
-    shiperon::process(&input, config);
+    shiperon::process(&input, Path::new(&args.out.unwrap()), config)?;
 
     Ok(())
 }

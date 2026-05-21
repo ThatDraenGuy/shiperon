@@ -211,6 +211,10 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
                 let char_type = self.ctx().i8_type();
                 char_type.const_int(*c as u64, false).into()
             },
+            PrimitiveExpr::Boolean(b) => {
+                let bool_type = self.ctx().bool_type();
+                bool_type.const_int(if *b { 1 } else { 0 }, false).into()
+            },
         }
     }
 

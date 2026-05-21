@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, rc::Rc};
 
 use crate::{
-    ByteSource,
+    ByteSource, TokenRegistry,
     ast::*,
     lexer::{Token, TokenValue},
     parser::ParserLoc,
@@ -19,6 +19,7 @@ pub enum ParserValue<'src> {
     Float(Rc<ShipFloat<'src>>),
     String(Rc<ShipString<'src>>),
     Char(Rc<ShipChar<'src>>),
+    Bool(Rc<ShipBool<'src>>),
     This(Rc<ShipThis<'src>>),
     Super(Rc<ShipSuper<'src>>),
     Primary(ShipPrimaryAll<'src>),
@@ -103,6 +104,15 @@ impl<'src> ShipChar<'src> {
         match value {
             ParserValue::Char(n) => n,
             other => unreachable!("expected Char, got {:?}", other),
+        }
+    }
+}
+
+impl<'src> ShipBool<'src> {
+    pub fn from(value: ParserValue<'src>) -> Rc<Self> {
+        match value {
+            ParserValue::Bool(n) => n,
+            other => unreachable!("expected Bool, got {:?}", other),
         }
     }
 }
@@ -484,6 +494,15 @@ impl<'src> ParserValue<'src> {
         }
     }
 
+    pub fn new_bool(src: &impl ByteSource<'src>, token: Token) -> Self {
+        if token.token_type == TokenRegistry::kTRUE {
+            Self::Bool(ShipBool::new(BoolData { bool: true }, token.loc, src))
+        } else if token.token_type == TokenRegistry::kFALSE {
+            Self::Bool(ShipBool::new(BoolData { bool: false }, token.loc, src))
+        } else {
+            unreachable!("expected Bool, got {:?}", token)
+        }
+    }
     pub fn new_this(src: &impl ByteSource<'src>, token: Token) -> Self {
         Self::This(ShipThis::new(ThisData {}, token.loc, src))
     }

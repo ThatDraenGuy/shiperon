@@ -21,6 +21,7 @@ pub enum PrimitiveExpr {
     Real(f32),
     String(String),
     Char(char),
+    Boolean(bool),
 }
 
 pub enum CallExpr {
@@ -114,10 +115,7 @@ impl ExprModel {
                     .constructors
                     .find_matching_cons(ctx, &arg_types, cons_args)
                     .map(|(cons_id, _cons_data)| {
-                        (
-                            cls_id,
-                            CallExpr::Cons { class: scopes.curr_cls.into(), cons: cons_id, args },
-                        )
+                        (cls_id, CallExpr::Cons { class: cls_id, cons: cons_id, args })
                     })
                     .unwrap_or_else(|e| {
                         errors.push(e.into());
@@ -276,6 +274,10 @@ impl ExprModel {
                 ShipPrimaryAll::Char(char_node) => Self {
                     expr_type: LibClassId::Char.into(),
                     expr: PrimitiveExpr::Char(char_node.char).into(),
+                },
+                ShipPrimaryAll::Bool(bool_node) => Self {
+                    expr_type: LibClassId::Boolean.into(),
+                    expr: PrimitiveExpr::Boolean(bool_node.bool).into(),
                 },
                 ShipPrimaryAll::This(_node) => {
                     Self { expr_type: scopes.curr_cls.into(), expr: Expr::This }

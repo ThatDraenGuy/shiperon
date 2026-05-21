@@ -4,6 +4,9 @@ pub mod ast;
 pub mod codegen;
 pub mod config;
 
+use std::error::Error;
+use std::path::Path;
+
 pub use config::CompilerConfig;
 pub use config::ShipFeature;
 
@@ -27,7 +30,7 @@ use crate::codegen::compile;
 use crate::diagnostics::Renderable;
 use crate::stdlib::stdlib;
 
-pub fn process(input: &str, config: CompilerConfig) {
+pub fn process(input: &str, output: &Path, config: CompilerConfig) -> Result<(), Box<dyn Error>> {
     let parser = Parser::new(Lexer::of_str(input), config);
     let parse_data = parser.consume_parse();
 
@@ -38,10 +41,11 @@ pub fn process(input: &str, config: CompilerConfig) {
         all_diagnostics.append(&mut diagnostics);
 
         if all_diagnostics.is_empty() {
-            compile(ctx);
+            compile(ctx, output)?;
         }
     }
     for item in &all_diagnostics {
         println!("{}\n", item.render(&parse_data.src));
     }
+    Ok(())
 }

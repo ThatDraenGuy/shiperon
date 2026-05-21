@@ -72,6 +72,10 @@ impl FieldModel {
                 field_type: LibClassId::Char.into(),
                 init_expr: PrimitiveExpr::Char(char_node.char).into(),
             }),
+            ShipPrimaryAll::Bool(bool_node) => Ok(FieldModel {
+                field_type: LibClassId::Boolean.into(),
+                init_expr: PrimitiveExpr::Boolean(bool_node.bool).into(),
+            }),
             primary => {
                 Err(FieldError::InvalidInitExpr { expr: ShipExprAll::Primary(primary.clone()) })
             },

@@ -231,6 +231,8 @@ impl<'src, S: ByteSource<'src>> Lexer<'src, S> {
             "return" => self.empty_token(TokenRegistry::kRETURN),
             "as" => self.empty_token(TokenRegistry::kAS),
             "super" => self.empty_token(TokenRegistry::kSUPER),
+            "true" => self.empty_token(TokenRegistry::kTRUE),
+            "false" => self.empty_token(TokenRegistry::kFALSE),
             _ => self.token(TokenRegistry::tIDENTIFIER, TokenValue::String(string)),
         })
     }

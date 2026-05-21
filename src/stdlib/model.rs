@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 
 use derive_more::From;
 use inkwell::{
@@ -149,10 +149,8 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                 ParamsSignature::empty(),
                 LibConsObjectImpl {
                     def_impl: |ctx| {
-                        let func_type = ctx
-                            .ctx()
-                            .void_type()
-                            .fn_type(&[ctx.ctx().ptr_type(AddressSpace::default()).into()], false);
+                        let func_type =
+                            ctx.ctx().ptr_type(AddressSpace::default()).fn_type(&[], false);
                         ctx.module().add_function("cls_AnyRef_cons_args_", func_type, None)
                     },
                 },
@@ -1094,6 +1092,21 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                     )],
                 ),
                 (
+                    "Equal",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::new(vec![LibClassId::Boolean.into()]),
+                            return_type: Some(LibClassId::Boolean.into()),
+                            overriding: None,
+                        },
+                        LibMethodValueImpl {
+                            call_impl: |ctx, object, args| {
+                                int_compare(IntPredicate::EQ, ctx, object, args)
+                            },
+                        },
+                    )],
+                ),
+                (
                     "Or",
                     vec![(
                         MethodSignature {
@@ -1183,10 +1196,24 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
         LibObjectModel {
             id: LibClassId::Array,
             parent: LibClassId::AnyRef,
-            init_impl: |ctx| todo!(),
+            init_impl: |ctx| {
+                let func_type = ctx
+                    .ctx()
+                    .void_type()
+                    .fn_type(&[ctx.ctx().ptr_type(AddressSpace::default()).into()], false);
+                ctx.module().add_function("cls_Array_init", func_type, None)
+            },
             constructors: vec![(
                 ParamsSignature::new(vec![LibClassId::Integer.into()]),
-                LibConsObjectImpl { def_impl: |ctx| todo!() },
+                LibConsObjectImpl {
+                    def_impl: |ctx| {
+                        let func_type = ctx
+                            .ctx()
+                            .ptr_type(AddressSpace::default())
+                            .fn_type(&[ctx.ctx().i32_type().into()], false);
+                        ctx.module().add_function("cls_Array_cons_args_Integer", func_type, None)
+                    },
+                },
             )],
             methods: HashMap::from([
                 (
@@ -1197,7 +1224,20 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                             return_type: Some(LibClassId::List.into()),
                             overriding: None,
                         },
-                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type =
+                                    llvm.ctx().ptr_type(AddressSpace::default()).fn_type(
+                                        &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
+                                        false,
+                                    );
+                                llvm.module().add_function(
+                                    "cls_Array_method_toList_args_",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                        },
                     )],
                 ),
                 (
@@ -1208,7 +1248,19 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                             return_type: Some(LibClassId::Integer.into()),
                             overriding: None,
                         },
-                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type = llvm.ctx().i32_type().fn_type(
+                                    &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
+                                    false,
+                                );
+                                llvm.module().add_function(
+                                    "cls_Array_method_Length_args_",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                        },
                     )],
                 ),
                 (
@@ -1219,7 +1271,23 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                             return_type: Some(LibClassId::AnyRef.into()),
                             overriding: None,
                         },
-                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type =
+                                    llvm.ctx().ptr_type(AddressSpace::default()).fn_type(
+                                        &[
+                                            llvm.ctx().ptr_type(AddressSpace::default()).into(),
+                                            llvm.ctx().i32_type().into(),
+                                        ],
+                                        false,
+                                    );
+                                llvm.module().add_function(
+                                    "cls_Array_method_Get_args_Integer",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                        },
                     )],
                 ),
                 (
@@ -1233,7 +1301,23 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                             return_type: None,
                             overriding: None,
                         },
-                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type = llvm.ctx().void_type().fn_type(
+                                    &[
+                                        llvm.ctx().ptr_type(AddressSpace::default()).into(),
+                                        llvm.ctx().i32_type().into(),
+                                        llvm.ctx().ptr_type(AddressSpace::default()).into(),
+                                    ],
+                                    false,
+                                );
+                                llvm.module().add_function(
+                                    "cls_Array_method_Set_args_",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                        },
                     )],
                 ),
             ]),

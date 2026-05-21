@@ -403,6 +403,7 @@ pub enum ShipPrimaryAll<'src> {
     Float(Rc<ShipFloat<'src>>),
     String(Rc<ShipString<'src>>),
     Char(Rc<ShipChar<'src>>),
+    Bool(Rc<ShipBool<'src>>),
     This(Rc<ShipThis<'src>>),
     Id(Rc<ShipId<'src>>),
 }
@@ -413,6 +414,7 @@ impl<'src> WithParserLoc for ShipPrimaryAll<'src> {
             ShipPrimaryAll::Float(node) => node.loc(),
             ShipPrimaryAll::String(node) => node.loc(),
             ShipPrimaryAll::Char(node) => node.loc(),
+            ShipPrimaryAll::Bool(node) => node.loc(),
             ShipPrimaryAll::This(node) => node.loc(),
             ShipPrimaryAll::Id(node) => node.loc(),
         }
@@ -426,6 +428,7 @@ impl<'src> Display for ShipPrimaryAll<'src> {
             ShipPrimaryAll::Float(node) => node.fmt(f),
             ShipPrimaryAll::String(node) => node.fmt(f),
             ShipPrimaryAll::Char(node) => node.fmt(f),
+            ShipPrimaryAll::Bool(node) => node.fmt(f),
             ShipPrimaryAll::This(node) => node.fmt(f),
             ShipPrimaryAll::Id(node) => node.fmt(f),
         }
@@ -475,6 +478,17 @@ impl NodeData for CharData {
     }
 }
 pub type ShipChar<'src> = Node<'src, CharData>;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BoolData {
+    pub bool: bool,
+}
+impl NodeData for BoolData {
+    fn name() -> &'static str {
+        "Bool"
+    }
+}
+pub type ShipBool<'src> = Node<'src, BoolData>;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ThisData {}

@@ -50,7 +50,6 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
         // store all args into their variables
         for ((_var_id, (_var_type, param_ptr)), llvm_param) in
             llvm_vars.iter().zip(func.get_params())
-        //skip self ptr
         {
             self.builder()
                 .build_store(*param_ptr, llvm_param)
