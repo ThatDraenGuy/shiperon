@@ -1,0 +1,7 @@
+class Program is
+    var res: Integer(0)
+
+    this(a: Integer, b: Integer) is
+        this.res := a.Plus(b)
+    end
+end
