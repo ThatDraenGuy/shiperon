@@ -1,3 +1,5 @@
+use std::iter;
+
 use derive_more::{From, Unwrap};
 use inkwell::{
     AddressSpace,
@@ -105,7 +107,8 @@ impl<'ctx> ObjectImpl<'ctx> {
             .build_load(llvm.ctx().ptr_type(AddressSpace::default()), method_ptr_ptr, "method_ptr")
             .expect("FATAL: LLVM failed to build_load");
 
-        let meta_args: Vec<_> = args.into_iter().map(BasicMetadataValueEnum::from).collect();
+        let meta_args: Vec<_> =
+            iter::once(object).chain(args).map(BasicMetadataValueEnum::from).collect();
         let res = llvm
             .builder()
             .build_indirect_call(

@@ -10,7 +10,7 @@ use inkwell::{
     module::{Linkage, Module as LLVMModule},
     targets::{self, CodeModel, RelocMode, Target, TargetMachine},
     types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, StructType},
-    values::{FunctionValue, StructValue},
+    values::FunctionValue,
 };
 use itertools::Itertools;
 
@@ -252,43 +252,6 @@ impl<'ctx> ClassImplRegistry<'ctx> {
         llvm.module().add_function(cons_name, func_type, None)
     }
 
-    fn codegen_cons_meta(
-        llvm: &impl LLVMCtx<'ctx>,
-        stdlib: &StdLibImpl<'ctx>,
-        signature: &ParamsSignature,
-        func: FunctionValue<'ctx>,
-        cons_name: &str,
-    ) -> StructValue<'ctx> {
-        let arg_ids: Vec<_> = signature
-            .param_types
-            .iter()
-            .map(|cls_id| match cls_id {
-                ClassId::User(_user_class_id) => 0,
-                ClassId::Lib(lib_class_id) => match lib_class_id {
-                    LibClassId::Integer => 3,
-                    LibClassId::Real => 4,
-                    LibClassId::Boolean => 5,
-                    _ => 0,
-                },
-                ClassId::Invalid => 0,
-            })
-            .map(|num| llvm.ctx().i32_type().const_int(num, false))
-            .collect();
-        let arg_ids_array = llvm.module().add_global(
-            llvm.ctx().i32_type().array_type(signature.param_types.len() as u32),
-            None,
-            &format!("arg_ids_{cons_name}"),
-        );
-        arg_ids_array.set_constant(true);
-        arg_ids_array.set_initializer(&llvm.ctx().i32_type().const_array(&arg_ids));
-
-        stdlib.cons_meta_type.const_named_struct(&[
-            llvm.ctx().i32_type().const_int(signature.param_types.len() as u64, false).into(),
-            arg_ids_array.as_pointer_value().into(),
-            func.as_global_value().as_pointer_value().into(),
-        ])
-    }
-
     fn get_user_struct_type<'src>(
         llvm: &impl LLVMCtx<'ctx>,
         ast: &impl ShipCtx<'src>,
@@ -303,11 +266,11 @@ impl<'ctx> ClassImplRegistry<'ctx> {
 
     fn get_cls_impl<'a>(
         stdlib: &'a StdLibImpl<'ctx>,
-        ready: &'a HashMap<UserClassId, (ClassImpl<'ctx>, StructValue<'ctx>)>,
+        ready: &'a HashMap<UserClassId, ClassImpl<'ctx>>,
         cls_id: &ClassId,
     ) -> &'a ClassImpl<'ctx> {
         match cls_id {
-            ClassId::User(user_class_id) => &ready.get(user_class_id).unwrap().0,
+            ClassId::User(user_class_id) => ready.get(user_class_id).unwrap(),
             ClassId::Lib(lib_class_id) => stdlib.get(lib_class_id),
             ClassId::Invalid => unreachable!(),
         }
@@ -316,24 +279,21 @@ impl<'ctx> ClassImplRegistry<'ctx> {
         llvm: &impl LLVMCtx<'ctx>,
         ast: &impl ShipCtx<'src>,
         stdlib: &'a StdLibImpl<'ctx>,
-        ready: &'a mut HashMap<UserClassId, (ClassImpl<'ctx>, StructValue<'ctx>)>,
+        ready: &'a mut HashMap<UserClassId, ClassImpl<'ctx>>,
         cls_id: UserClassId,
         cls: &ClassModel,
-    ) -> &'a (ClassImpl<'ctx>, StructValue<'ctx>) {
+    ) -> &'a ClassImpl<'ctx> {
         let parent_impl = match &cls.parent {
             ClassId::User(user_parent) => match ready.get(user_parent) {
-                Some(parent_impl) => &parent_impl.0,
-                None => {
-                    &Self::codegen_cls_impl(
-                        llvm,
-                        ast,
-                        stdlib,
-                        ready,
-                        *user_parent,
-                        ast.cls_models().get(user_parent),
-                    )
-                    .0
-                },
+                Some(parent_impl) => parent_impl,
+                None => Self::codegen_cls_impl(
+                    llvm,
+                    ast,
+                    stdlib,
+                    ready,
+                    *user_parent,
+                    ast.cls_models().get(user_parent),
+                ),
             },
             ClassId::Lib(lib_class_id) => stdlib.get(lib_class_id),
             ClassId::Invalid => unreachable!(),
@@ -358,48 +318,15 @@ impl<'ctx> ClassImplRegistry<'ctx> {
         let object_type = Self::get_user_struct_type(llvm, ast, &cls_id);
         object_type.set_body(&struct_member_types, true);
 
-        let mut cons_meta_structs = Vec::new();
         let constructors = cls
             .constructors
             .iter()
             .map(|(cons_id, cons)| {
                 let cons_name = Self::create_cons_name(ast, &cls_id, cons_id);
                 let func = Self::codegen_cons_decl(llvm, &cons.signature, &cons_name);
-                cons_meta_structs.push(Self::codegen_cons_meta(
-                    llvm,
-                    stdlib,
-                    &cons.signature,
-                    func,
-                    &cons_name,
-                ));
                 (cons_id, ConsImpl { func })
             })
             .collect();
-
-        //class metadata
-        let name_value =
-            llvm.ctx().const_string(ast.cls_names().get_name(&cls_id).as_bytes(), true);
-        let name_ptr = llvm.module().add_global(
-            name_value.get_type(),
-            None,
-            &format!("cls_{}_name", ast.cls_names().get_name(&cls_id)),
-        );
-        name_ptr.set_constant(true);
-        name_ptr.set_initializer(&name_value);
-
-        let cons_meta = llvm.module().add_global(
-            stdlib.cons_meta_type.array_type(cons_meta_structs.len() as u32),
-            None,
-            &format!("cls_{}_cons_meta", ast.cls_names().get_name(&cls_id)),
-        );
-        cons_meta.set_constant(true);
-        cons_meta.set_initializer(&stdlib.cons_meta_type.const_array(&cons_meta_structs));
-
-        let cls_meta = stdlib.cls_meta_type.const_named_struct(&[
-            name_ptr.as_pointer_value().into(),
-            llvm.ctx().i32_type().const_int(cons_meta_structs.len() as u64, false).into(),
-            cons_meta.as_pointer_value().into(),
-        ]);
 
         //class vtable
         let mut vtable_ptrs = parent_impl.vtable_ptrs.clone();
@@ -452,19 +379,16 @@ impl<'ctx> ClassImplRegistry<'ctx> {
 
         ready.insert(
             cls_id,
-            (
-                ObjectImpl {
-                    vtable,
-                    vtable_ptrs,
-                    init_func,
-                    object_type,
-                    constructors,
-                    methods,
-                    fields,
-                }
-                .into(),
-                cls_meta,
-            ),
+            ObjectImpl {
+                vtable,
+                vtable_ptrs,
+                init_func,
+                object_type,
+                constructors,
+                methods,
+                fields,
+            }
+            .into(),
         );
         &ready[&cls_id]
     }
@@ -479,25 +403,10 @@ impl<'ctx> ClassImplRegistry<'ctx> {
             Self::codegen_cls_impl(llvm, ast, stdlib, &mut ready, cls_id, cls);
         }
 
-        let mut cls_meta_structs = Vec::new();
-        let result = ast
-            .cls_models()
+        ast.cls_models()
             .iter()
-            .map(|(cls_id, _cls)| {
-                let (cls_impl, cls_meta) = ready.remove(&cls_id).unwrap();
-                cls_meta_structs.push(cls_meta);
-                (cls_id, cls_impl)
-            })
-            .collect();
-
-        let cls_meta = llvm.module().add_global(
-            stdlib.cls_meta_type.array_type(cls_meta_structs.len() as u32),
-            None,
-            "cls_meta",
-        );
-        cls_meta.set_constant(true);
-        cls_meta.set_initializer(&stdlib.cls_meta_type.const_array(&cls_meta_structs));
-        result
+            .map(|(cls_id, _cls)| (cls_id, ready.remove(&cls_id).unwrap()))
+            .collect()
     }
 }
 
@@ -505,8 +414,6 @@ pub struct StdLibImpl<'ctx> {
     impls: HashMap<LibClassId, ClassImpl<'ctx>>,
     malloc: FunctionValue<'ctx>,
     exit: FunctionValue<'ctx>,
-    cls_meta_type: StructType<'ctx>,
-    cons_meta_type: StructType<'ctx>,
 }
 impl<'ctx> StdLibImpl<'ctx> {
     fn codegen(
@@ -555,11 +462,21 @@ impl<'ctx> StdLibImpl<'ctx> {
                 } else {
                     ready[&parent_id].unwrap_object_ref().vtable_ptrs.clone()
                 };
+                let methods_count = lib_impl
+                    .methods
+                    .iter()
+                    .flat_map(|(_name_id, overloads)| overloads.iter())
+                    .map(|(_overload_id, overload)| overload.vtable_offset)
+                    .max()
+                    .unwrap_or(0)
+                    + 1;
+                vtable_ptrs
+                    .resize(methods_count, llvm.ctx.ptr_type(AddressSpace::default()).const_null());
                 let methods = lib_impl.methods.map_method(|_method_id, method| {
                     let func = (method.def_impl)(llvm);
-                    let vtable_offset = vtable_ptrs.len() as u64;
-                    vtable_ptrs.push(func.as_global_value().as_pointer_value());
-                    MethodImpl { func, vtable_offset }
+                    let vtable_offset = method.vtable_offset;
+                    vtable_ptrs[vtable_offset] = func.as_global_value().as_pointer_value();
+                    MethodImpl { func, vtable_offset: vtable_offset as u64 }
                 });
 
                 let vtable_type = llvm
@@ -612,24 +529,21 @@ impl<'ctx> StdLibImpl<'ctx> {
         let exit_type = llvm.ctx.void_type().fn_type(&[llvm.ctx.i32_type().into()], false);
         let exit = llvm.module.add_function("exit", exit_type, Some(Linkage::External));
 
-        let cls_meta_type = llvm.ctx.opaque_struct_type("ClsMeta");
-        cls_meta_type.set_body(
-            &[
-                llvm.ctx.ptr_type(AddressSpace::default()).into(), //указатель на имя класса
-                llvm.ctx.i32_type().into(),                        //число конструкторов
-                llvm.ctx.ptr_type(AddressSpace::default()).into(), //указатель на таблицу конструкторов
-            ],
-            true,
-        );
-        let cons_meta_type = llvm.ctx.opaque_struct_type("ConsMeta");
-        cons_meta_type.set_body(
-            &[
-                llvm.ctx.i32_type().into(),                        //число аргументов
-                llvm.ctx.ptr_type(AddressSpace::default()).into(), //указатель на массив аргументов
-                llvm.ctx.ptr_type(AddressSpace::default()).into(), //указатель на функцию
-            ],
-            true,
-        );
+        let format_type = llvm
+            .ctx
+            .ptr_type(AddressSpace::default())
+            .fn_type(&[llvm.ctx.ptr_type(AddressSpace::default()).into()], true);
+        llvm.module.add_function("cls_String_cons_internal_format", format_type, None);
+
+        let str_fmt_val = llvm.ctx.const_string(b"%s", true);
+        let str_fmt = llvm.module.add_global(str_fmt_val.get_type(), None, "StringFormat");
+        str_fmt.set_constant(true);
+        str_fmt.set_initializer(&str_fmt_val);
+
+        let int_fmt_val = llvm.ctx.const_string(b"%d", true);
+        let int_fmt = llvm.module.add_global(int_fmt_val.get_type(), None, "IntegerFormat");
+        int_fmt.set_constant(true);
+        int_fmt.set_initializer(&int_fmt_val);
 
         let mut impls = HashMap::new();
         for cls_id in [
@@ -640,12 +554,13 @@ impl<'ctx> StdLibImpl<'ctx> {
             LibClassId::Real,
             LibClassId::Boolean,
             LibClassId::Array,
+            LibClassId::String,
         ] {
             let class_impl = Self::codegen(llvm, stdlib, &mut impls, &cls_id);
             impls.insert(cls_id, class_impl);
         }
 
-        Self { impls, malloc, exit, cons_meta_type, cls_meta_type }
+        Self { impls, malloc, exit }
     }
     pub fn get(&self, cls_id: &LibClassId) -> &ClassImpl<'ctx> {
         self.impls.get(cls_id).unwrap()

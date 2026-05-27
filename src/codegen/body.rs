@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use inkwell::{
     AddressSpace, IntPredicate,
     basic_block::BasicBlock,
-    values::{AnyValue, AnyValueEnum, BasicValueEnum, FunctionValue, PointerValue},
+    values::{AnyValue, AnyValueEnum, BasicValue, BasicValueEnum, FunctionValue, PointerValue},
 };
 
 use crate::{
@@ -204,8 +204,31 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
                 float_type.const_float((*r).into()).into()
             },
             PrimitiveExpr::String(s) => {
-                let string = self.ctx().const_string(s.as_bytes(), true);
-                string.into()
+                let string_value = self.ctx().const_string(s.as_bytes(), true);
+                let string_global = self.module().add_global(
+                    string_value.get_type(),
+                    None,
+                    &format!("String_const_{s}"),
+                );
+                string_global.set_constant(true);
+                string_global.set_initializer(&string_value);
+
+                self.builder()
+                    .build_call(
+                        self.module().get_function("cls_String_cons_internal_format").unwrap(),
+                        &[
+                            self.module()
+                                .get_global("StringFormat")
+                                .unwrap()
+                                .as_basic_value_enum()
+                                .into(),
+                            string_global.as_pointer_value().into(),
+                        ],
+                        "StringCons",
+                    )
+                    .expect("FATAL: LLVM failed to build_call")
+                    .try_as_basic_value()
+                    .unwrap_basic()
             },
             PrimitiveExpr::Char(c) => {
                 let char_type = self.ctx().i8_type();

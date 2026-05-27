@@ -108,6 +108,11 @@ impl<Id: RegistryId, V> Registry<Id, V> {
     }
 
     #[inline]
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    #[inline]
     pub fn get(&self, id: &Id) -> &V {
         self.inner[id.as_index()].as_ref().unwrap()
     }

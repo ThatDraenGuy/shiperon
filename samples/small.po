@@ -1,7 +1,22 @@
-class Program is
+class Main is
     var res: Integer(0)
 
-    this(a: Integer, b: Integer) is
-        this.res := a.Plus(b)
+    this(args: Array) is
+        if args.Length().Equal(2).Not() then
+            res := -1
+        else
+            var aStr : args.Get(0) as String
+            var bStr : args.Get(1) as String
+
+            if aStr.IsInteger().And(bStr.IsInteger()) then
+                var a : aStr.ToInteger()
+                var b : bStr.ToInteger()
+                res := a.Plus(b)
+            else
+                res := -2
+            end
+        end
     end
+
+    method ToString() => "Main is res=".Concat(res.ToString()).Concat(" end")
 end

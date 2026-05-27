@@ -3,7 +3,9 @@ use std::{collections::HashMap, vec};
 use derive_more::From;
 use inkwell::{
     AddressSpace, FloatPredicate, IntPredicate,
-    values::{AnyValueEnum, BasicValueEnum, FloatValue, FunctionValue, IntValue},
+    values::{
+        AnyValue, AnyValueEnum, BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue,
+    },
 };
 
 use crate::{
@@ -23,6 +25,7 @@ pub struct LibConsObjectImpl {
 }
 pub struct LibMethodObjectImpl {
     pub def_impl: for<'ctx> fn(&dyn LLVMCtx<'ctx>) -> FunctionValue<'ctx>,
+    pub vtable_offset: usize,
 }
 pub struct LibObjectModel {
     pub id: LibClassId,
@@ -175,6 +178,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                 None,
                             )
                         },
+                        vtable_offset: 0,
                     },
                 )],
             )]),
@@ -216,6 +220,37 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                 ),
             ],
             methods: HashMap::from([
+                (
+                    "ToString",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::empty(),
+                            return_type: Some(LibClassId::String.into()),
+                            overriding: None,
+                        },
+                        LibMethodValueImpl {
+                            call_impl: |ctx, object, args| {
+                                ctx.builder()
+                                    .build_call(
+                                        ctx.module()
+                                            .get_function("cls_String_cons_internal_format")
+                                            .unwrap(),
+                                        &[
+                                            ctx.module()
+                                                .get_global("IntegerFormat")
+                                                .unwrap()
+                                                .as_pointer_value()
+                                                .into(),
+                                            object.into(),
+                                        ],
+                                        "IntegerToString",
+                                    )
+                                    .expect("FATAL: LLVM failed to build_call")
+                                    .as_any_value_enum()
+                            },
+                        },
+                    )],
+                ),
                 (
                     "ToReal",
                     vec![(
@@ -1216,30 +1251,30 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                 },
             )],
             methods: HashMap::from([
-                (
-                    "toList",
-                    vec![(
-                        MethodSignature {
-                            params: ParamsSignature::empty(),
-                            return_type: Some(LibClassId::List.into()),
-                            overriding: None,
-                        },
-                        LibMethodObjectImpl {
-                            def_impl: |llvm| {
-                                let func_type =
-                                    llvm.ctx().ptr_type(AddressSpace::default()).fn_type(
-                                        &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
-                                        false,
-                                    );
-                                llvm.module().add_function(
-                                    "cls_Array_method_toList_args_",
-                                    func_type,
-                                    None,
-                                )
-                            },
-                        },
-                    )],
-                ),
+                // (
+                //     "toList",
+                //     vec![(
+                //         MethodSignature {
+                //             params: ParamsSignature::empty(),
+                //             return_type: Some(LibClassId::List.into()),
+                //             overriding: None,
+                //         },
+                //         LibMethodObjectImpl {
+                //             def_impl: |llvm| {
+                //                 let func_type =
+                //                     llvm.ctx().ptr_type(AddressSpace::default()).fn_type(
+                //                         &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
+                //                         false,
+                //                     );
+                //                 llvm.module().add_function(
+                //                     "cls_Array_method_toList_args_",
+                //                     func_type,
+                //                     None,
+                //                 )
+                //             },
+                //         },
+                //     )],
+                // ),
                 (
                     "Length",
                     vec![(
@@ -1260,6 +1295,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     None,
                                 )
                             },
+                            vtable_offset: 1,
                         },
                     )],
                 ),
@@ -1287,6 +1323,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     None,
                                 )
                             },
+                            vtable_offset: 2,
                         },
                     )],
                 ),
@@ -1312,11 +1349,12 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                                     false,
                                 );
                                 llvm.module().add_function(
-                                    "cls_Array_method_Set_args_",
+                                    "cls_Array_method_Set_args_Integer_AnyRef",
                                     func_type,
                                     None,
                                 )
                             },
+                            vtable_offset: 3,
                         },
                     )],
                 ),
@@ -1326,6 +1364,258 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
         .into(),
     );
 
+    hashmap.insert(
+        "String",
+        LibObjectModel {
+            id: LibClassId::String,
+            parent: LibClassId::AnyRef,
+            init_impl: |ctx| {
+                let func_type = ctx
+                    .ctx()
+                    .void_type()
+                    .fn_type(&[ctx.ctx().ptr_type(AddressSpace::default()).into()], false);
+                ctx.module().add_function("cls_String_init", func_type, None)
+            },
+            constructors: vec![(
+                ParamsSignature::empty(),
+                LibConsObjectImpl {
+                    def_impl: |ctx| {
+                        let func_type =
+                            ctx.ctx().ptr_type(AddressSpace::default()).fn_type(&[], false);
+                        ctx.module().add_function("cls_String_cons_args_", func_type, None)
+                    },
+                },
+            )],
+            methods: HashMap::from([
+                (
+                    "ToString",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::empty(),
+                            return_type: Some(LibClassId::String.into()),
+                            overriding: None,
+                        },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type =
+                                    llvm.ctx().ptr_type(AddressSpace::default()).fn_type(
+                                        &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
+                                        false,
+                                    );
+                                llvm.module().add_function(
+                                    "cls_String_method_ToString_args_",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                            vtable_offset: 0,
+                        },
+                    )],
+                ),
+                (
+                    "IsInteger",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::empty(),
+                            return_type: Some(LibClassId::Boolean.into()),
+                            overriding: None,
+                        },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type = llvm.ctx().bool_type().fn_type(
+                                    &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
+                                    false,
+                                );
+                                llvm.module().add_function(
+                                    "cls_String_method_IsInteger_args_",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                            vtable_offset: 1,
+                        },
+                    )],
+                ),
+                (
+                    "IsReal",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::empty(),
+                            return_type: Some(LibClassId::Boolean.into()),
+                            overriding: None,
+                        },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type = llvm.ctx().bool_type().fn_type(
+                                    &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
+                                    false,
+                                );
+                                llvm.module().add_function(
+                                    "cls_String_method_IsReal_args_",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                            vtable_offset: 2,
+                        },
+                    )],
+                ),
+                (
+                    "IsBoolean",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::empty(),
+                            return_type: Some(LibClassId::Boolean.into()),
+                            overriding: None,
+                        },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type = llvm.ctx().bool_type().fn_type(
+                                    &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
+                                    false,
+                                );
+                                llvm.module().add_function(
+                                    "cls_String_method_IsBoolean_args_",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                            vtable_offset: 3,
+                        },
+                    )],
+                ),
+                (
+                    "ToInteger",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::empty(),
+                            return_type: Some(LibClassId::Integer.into()),
+                            overriding: None,
+                        },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type = llvm.ctx().i32_type().fn_type(
+                                    &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
+                                    false,
+                                );
+                                llvm.module().add_function(
+                                    "cls_String_method_ToInteger_args_",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                            vtable_offset: 4,
+                        },
+                    )],
+                ),
+                (
+                    "ToReal",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::empty(),
+                            return_type: Some(LibClassId::Real.into()),
+                            overriding: None,
+                        },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type = llvm.ctx().f32_type().fn_type(
+                                    &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
+                                    false,
+                                );
+                                llvm.module().add_function(
+                                    "cls_String_method_ToReal_args_",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                            vtable_offset: 5,
+                        },
+                    )],
+                ),
+                (
+                    "ToBoolean",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::empty(),
+                            return_type: Some(LibClassId::Boolean.into()),
+                            overriding: None,
+                        },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type = llvm.ctx().bool_type().fn_type(
+                                    &[llvm.ctx().ptr_type(AddressSpace::default()).into()],
+                                    false,
+                                );
+                                llvm.module().add_function(
+                                    "cls_String_method_ToBoolean_args_",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                            vtable_offset: 6,
+                        },
+                    )],
+                ),
+                (
+                    "Equal",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::new(vec![LibClassId::String.into()]),
+                            return_type: Some(LibClassId::Boolean.into()),
+                            overriding: None,
+                        },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type = llvm.ctx().bool_type().fn_type(
+                                    &[
+                                        llvm.ctx().ptr_type(AddressSpace::default()).into(),
+                                        llvm.ctx().ptr_type(AddressSpace::default()).into(),
+                                    ],
+                                    false,
+                                );
+                                llvm.module().add_function(
+                                    "cls_String_method_Equal_args_String",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                            vtable_offset: 7,
+                        },
+                    )],
+                ),
+                (
+                    "Concat",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::new(vec![LibClassId::String.into()]),
+                            return_type: Some(LibClassId::String.into()),
+                            overriding: None,
+                        },
+                        LibMethodObjectImpl {
+                            def_impl: |llvm| {
+                                let func_type =
+                                    llvm.ctx().ptr_type(AddressSpace::default()).fn_type(
+                                        &[
+                                            llvm.ctx().ptr_type(AddressSpace::default()).into(),
+                                            llvm.ctx().ptr_type(AddressSpace::default()).into(),
+                                        ],
+                                        false,
+                                    );
+                                llvm.module().add_function(
+                                    "cls_String_method_Concat_args_String",
+                                    func_type,
+                                    None,
+                                )
+                            },
+                            vtable_offset: 8,
+                        },
+                    )],
+                ),
+            ]),
+            fields: HashMap::new(),
+        }
+        .into(),
+    );
     hashmap.insert(
         "List",
         LibObjectModel {
@@ -1355,7 +1645,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                             return_type: Some(LibClassId::List.into()),
                             overriding: None,
                         },
-                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                        LibMethodObjectImpl { def_impl: |ctx| todo!(), vtable_offset: 1 },
                     )],
                 ),
                 (
@@ -1366,7 +1656,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                             return_type: Some(LibClassId::AnyRef.into()),
                             overriding: None,
                         },
-                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                        LibMethodObjectImpl { def_impl: |ctx| todo!(), vtable_offset: 2 },
                     )],
                 ),
                 (
@@ -1377,7 +1667,7 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
                             return_type: Some(LibClassId::List.into()),
                             overriding: None,
                         },
-                        LibMethodObjectImpl { def_impl: |ctx| todo!() },
+                        LibMethodObjectImpl { def_impl: |ctx| todo!(), vtable_offset: 3 },
                     )],
                 ),
             ]),
