@@ -31,6 +31,7 @@ use crate::diagnostics::Renderable;
 use crate::stdlib::stdlib;
 
 pub fn process(input: &str, output: &Path, config: CompilerConfig) -> Result<(), Box<dyn Error>> {
+    let debug = config.debug;
     let parser = Parser::new(Lexer::of_str(input), config);
     let parse_data = parser.consume_parse();
 
@@ -41,7 +42,7 @@ pub fn process(input: &str, output: &Path, config: CompilerConfig) -> Result<(),
         all_diagnostics.append(&mut diagnostics);
 
         if all_diagnostics.is_empty() {
-            compile(ctx, output)?;
+            compile(ctx, output, debug)?;
         }
     }
     for item in &all_diagnostics {

@@ -16,6 +16,7 @@ itertools = "0.14.0"
 once_cell = "1.21.4"
 ron = "0.12.0"
 serde = {version = "1.0.192", features = ["derive", "rc"] }
+tempdir = "0.3.7"
 thiserror = "2.0.18"
 
 [dev-dependencies]

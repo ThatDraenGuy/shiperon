@@ -1,7 +1,7 @@
 mod body;
 pub mod clsimpl;
 mod method;
-use std::{collections::HashMap, error::Error, path::Path};
+use std::{collections::HashMap, error::Error, fs, path::Path, process::Command};
 
 use inkwell::{
     AddressSpace, OptimizationLevel,
@@ -597,7 +597,13 @@ impl<'ctx, 'src> CodegenContext<'ctx, 'src> {
     }
 }
 
-pub fn compile<'src>(ast: ShipContext<'src>, output: &Path) -> Result<(), Box<dyn Error>> {
+const SHIP_LIB: &str = include_str!("../../stdlib/shiplib.c");
+
+pub fn compile<'src>(
+    ast: ShipContext<'src>,
+    output: &Path,
+    debug: bool,
+) -> Result<(), Box<dyn Error>> {
     let target_config = targets::InitializationConfig::default();
     Target::initialize_native(&target_config).expect("Failed to initialize native machine target!");
 
@@ -606,7 +612,10 @@ pub fn compile<'src>(ast: ShipContext<'src>, output: &Path) -> Result<(), Box<dy
 
     let codegen = CodegenContext::new(ast, &ctx);
     codegen.codegen();
-    codegen.llvm.module.print_to_file(output.with_extension("ll"))?;
+
+    if debug {
+        codegen.llvm.module.print_to_file(output.with_extension("ll"))?;
+    }
 
     let triple = TargetMachine::get_default_triple();
     let target = Target::from_triple(&triple).expect("Unknown target: please specify a target ");
@@ -622,10 +631,29 @@ pub fn compile<'src>(ast: ShipContext<'src>, output: &Path) -> Result<(), Box<dy
         )
         .unwrap();
 
-    machine.write_to_file(
-        &codegen.llvm.module,
-        targets::FileType::Object,
-        &output.with_extension("o"),
-    )?;
+    let tmp_dir = tempdir::TempDir::new("shiperon")?;
+    let lib_src = tmp_dir.path().join("shiplib.c");
+    let lib_obj = tmp_dir.path().join("shiplib.o");
+
+    fs::write(&lib_src, SHIP_LIB)?;
+    Command::new("clang")
+        .arg(if debug { "-g -c" } else { "-c" })
+        .arg(lib_src.to_str().unwrap())
+        .arg("-o")
+        .arg(lib_obj.to_str().unwrap())
+        .status()
+        .expect("Failed to compile shiplib");
+
+    let user_obj = tmp_dir.path().join(output.with_extension("o"));
+    machine.write_to_file(&codegen.llvm.module, targets::FileType::Object, &user_obj)?;
+
+    Command::new("clang")
+        .arg(lib_obj.to_str().unwrap())
+        .arg(user_obj.to_str().unwrap())
+        .arg("-lgc")
+        .arg("-o")
+        .arg(output.to_str().unwrap())
+        .status()
+        .expect("Failed to link program");
     Ok(())
 }

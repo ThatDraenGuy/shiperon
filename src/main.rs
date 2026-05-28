@@ -1,10 +1,7 @@
 use std::{error::Error, fs::read_to_string, path::Path};
 
 use clap::{Parser, ValueEnum};
-use ron::ser::PrettyConfig;
-use shiperon::{
-    CompilerConfig, Lexer, analyzer::Analyzer, config::FeatureFlags, diagnostics::Renderable,
-};
+use shiperon::{CompilerConfig, config::FeatureFlags};
 
 /// The one and only Shiperon Compiler
 #[derive(Parser, Debug)]

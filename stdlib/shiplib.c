@@ -23,7 +23,6 @@ void cls_AnyRef_init(void *this);
 void *cls_AnyRef_cons_args_();
 void *cls_AnyRef_method_ToString_args_(void *this);
 
-// void *cls_AnyRef_vtable_data[] = {cls_AnyRef_method_ToString_args_};
 extern void *cls_AnyRef_vtable_data[];
 
 void cls_AnyRef_init(void *this) {}
@@ -53,10 +52,6 @@ void cls_Array_method_Set_args_Integer_AnyRef(void *this, int32_t idx,
 void *cls_Array_method_Get_args_Integer(void *this, int32_t idx);
 int32_t cls_Array_method_Length_args_(void *this);
 
-// void *cls_Array_vtable_data[] = {
-//     cls_AnyRef_method_ToString_args_,
-//     cls_Array_method_Set_args_Integer_AnyRef,
-//     cls_Array_method_Get_args_Integer, cls_Array_method_Length_args_};
 extern void *cls_Array_vtable_data[];
 
 void cls_Array_init(void *this) { ((struct Array *)this)->len = 0; }
@@ -101,12 +96,6 @@ bool cls_String_method_ToBoolean_args_(void *this);
 bool cls_String_method_Equal_args_String(void *this, void *other);
 void *cls_String_method_Concat_args_String(void *this, void *other);
 
-// void *cls_String_vtable_data[] = {
-//     cls_String_method_IsInteger_args_,   cls_String_method_ToInteger_args_,
-//     cls_String_method_IsReal_args_,      cls_String_method_ToReal_args_,
-//     cls_String_method_IsBoolean_args_,   cls_String_method_ToBoolean_args_,
-//     cls_String_method_Equal_args_String,
-//     cls_String_method_Concat_args_String};
 extern void *cls_String_vtable_data[];
 
 void cls_String_init(void *this) { ((struct String *)this)->len = 0; }
@@ -208,11 +197,6 @@ void *cls_String_method_Concat_args_String(void *this, void *other) {
   struct String *str1 = ((struct String *)this);
   struct String *str2 = ((struct String *)other);
   return cls_String_cons_internal_format("%s%s", str1->data, str2->data);
-
-  // size_t size = str1->len + str2->len + 1;
-  // char *res = GC_malloc(sizeof(char) * size);
-  // snprintf(res, size, "%s%s", str1->data, str2->data);
-  // return cls_String_cons_internal_take(res);
 }
 
 void *cls_Main_cons_args_Array(void *array);
@@ -228,5 +212,6 @@ int main(int argc, char **argv) {
   struct String *res = (struct String *)((ToStringFunc)main->vtable[0])(main);
 
   printf("%s\n", res->data);
+  GC_gcollect();
   return 0;
 }
