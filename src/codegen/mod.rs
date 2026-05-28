@@ -545,6 +545,11 @@ impl<'ctx> StdLibImpl<'ctx> {
         int_fmt.set_constant(true);
         int_fmt.set_initializer(&int_fmt_val);
 
+        let real_fmt_val = llvm.ctx.const_string(b"%f", true);
+        let real_fmt = llvm.module.add_global(real_fmt_val.get_type(), None, "RealFormat");
+        real_fmt.set_constant(true);
+        real_fmt.set_initializer(&real_fmt_val);
+
         let mut impls = HashMap::new();
         for cls_id in [
             LibClassId::Class,
@@ -636,13 +641,13 @@ pub fn compile<'src>(
     let lib_obj = tmp_dir.path().join("shiplib.o");
 
     fs::write(&lib_src, SHIP_LIB)?;
-    Command::new("clang")
-        .arg(if debug { "-g -c" } else { "-c" })
-        .arg(lib_src.to_str().unwrap())
-        .arg("-o")
-        .arg(lib_obj.to_str().unwrap())
-        .status()
-        .expect("Failed to compile shiplib");
+    let mut cmd = Command::new("clang");
+    let mut cmd =
+        cmd.arg("-c").arg(lib_src.to_str().unwrap()).arg("-o").arg(lib_obj.to_str().unwrap());
+    if debug {
+        cmd = cmd.arg("-g")
+    }
+    cmd.status().expect("Failed to compile shiplib");
 
     let user_obj = tmp_dir.path().join(output.with_extension("o").file_name().unwrap());
     machine.write_to_file(&codegen.llvm.module, targets::FileType::Object, &user_obj)?;

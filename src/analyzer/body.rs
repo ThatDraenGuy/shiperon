@@ -292,7 +292,9 @@ impl Body {
         }
 
         if has_unreachable {
-            errors.push(BodyError::UnreachableStmts { stmts: unreachable_stmts }.into());
+            if !unreachable_stmts.is_empty() {
+                errors.push(BodyError::UnreachableStmts { stmts: unreachable_stmts }.into());
+            }
             Self { vars: scopes.exit().vars.build().1, stmts, return_expr: Some(BodyReturn::Never) }
         } else {
             Self { vars: scopes.exit().vars.build().1, stmts, return_expr: None }

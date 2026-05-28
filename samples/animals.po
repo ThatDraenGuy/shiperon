@@ -1,33 +1,45 @@
 class Animal is
     this() is
     end
-    method LimbsNum(): Integer => 0
+    method Speak(): String => String()
 end
 
 class Dog extends Animal is
     this() is
-        super() // not in spec, under question
     end
-    method LimbsNum(): Integer => 4
+    method Speak(): String => "Woof"
 end
 
-class Spider extends Animal is
+class Cat extends Animal is
     this() is
-        super() // not in spec, under question
     end
-    method LimbsNum(): Integer => 8
+    method Speak(): String => "Meow"
 end
 
 class Main is
-    // true -> 4
-    // false -> 8
-    this(isDog: Boolean): Integer is
-        var animal: Animal()
-        if isDog then
-            animal := Dog()
+    var result: String()
+
+    this(args: Array) is
+        if args.Length().Equal(1).Not() then
+            result := "Expected a single animal-name argument"
         else
-            animal := Spider()
+            var name: args.Get(0) as String
+
+            var animal: Animal()
+            if name.Equal("Dog") then
+                animal := Dog()
+            else
+                if name.Equal("Cat") then
+                    animal := Cat()
+                else
+                    result := "Invalid animal name. Valid names: Dog, Cat"
+                end
+            end
+            if result.Equal("") then
+                result := animal.Speak()
+            end
         end
-        return animal.LimbsNum()
     end
+
+    method ToString(): String => result
 end

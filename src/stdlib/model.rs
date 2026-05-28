@@ -708,6 +708,37 @@ pub fn models() -> HashMap<&'static str, LibClassModel> {
             ],
             methods: HashMap::from([
                 (
+                    "ToString",
+                    vec![(
+                        MethodSignature {
+                            params: ParamsSignature::empty(),
+                            return_type: Some(LibClassId::String.into()),
+                            overriding: None,
+                        },
+                        LibMethodValueImpl {
+                            call_impl: |ctx, object, _args| {
+                                ctx.builder()
+                                    .build_call(
+                                        ctx.module()
+                                            .get_function("cls_String_cons_internal_format")
+                                            .unwrap(),
+                                        &[
+                                            ctx.module()
+                                                .get_global("RealFormat")
+                                                .unwrap()
+                                                .as_pointer_value()
+                                                .into(),
+                                            object.into(),
+                                        ],
+                                        "RealToString",
+                                    )
+                                    .expect("FATAL: LLVM failed to build_call")
+                                    .as_any_value_enum()
+                            },
+                        },
+                    )],
+                ),
+                (
                     "ToInteger",
                     vec![(
                         MethodSignature {
