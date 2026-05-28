@@ -1,22 +1,26 @@
 use super::registry::*;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use derive_more::Display;
 use itertools::Itertools;
 
-use crate::StdlibCtx;
 use crate::analyzer::AnalysisError;
-use crate::analyzer::def::{ClassDefsRegistry, ClassMemberNamesCtx, GetMemberNamesCtx};
+use crate::analyzer::def::{
+    ClassDefsRegistry, ClassMemberNamesCtx, ClassMemberNamesRegistry, ClassNamesCtx,
+    GetMemberNamesCtx,
+};
 use crate::ast::{
     ShipArgs, ShipClassDef, ShipConsDef, ShipId, ShipMethodDef, ShipParams, ShipVarDef,
 };
 use crate::diagnostics::Renderable;
 use crate::parser::{ParserLoc, WithParserLoc};
+use crate::{ShipStdLib, StdlibCtx};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParamsSignature {
-    param_types: Vec<ClassId>,
+    pub param_types: Vec<ClassId>,
 }
 impl ParamsSignature {
     pub fn new(param_types: Vec<ClassId>) -> Self {
@@ -91,6 +95,7 @@ impl<'src> WithParserLoc for ConsError<'src> {
 pub struct MethodSignature {
     pub params: ParamsSignature,
     pub return_type: Option<ClassId>,
+    pub overriding: Option<(ClassId, MethodId)>, //top ClassId
 }
 
 #[derive(Debug, Clone, Display)]
@@ -158,6 +163,7 @@ pub trait GetClsSignatureCtx: StdlibCtx + ClassSignatureCtx {
         child: C,
         parent: P,
     ) -> (bool, u8);
+    fn get_top_method(&self, cls: ClassId, method: MethodId) -> (ClassId, MethodId);
 }
 impl<Ctx: StdlibCtx + ClassSignatureCtx> GetClsSignatureCtx for Ctx {
     fn get_cls_signature(&self, cls_id: &ClassId) -> &ClassSignature {
@@ -188,6 +194,13 @@ impl<Ctx: StdlibCtx + ClassSignatureCtx> GetClsSignatureCtx for Ctx {
             diff += 1;
         }
     }
+
+    fn get_top_method(&self, cls: ClassId, method: MethodId) -> (ClassId, MethodId) {
+        match self.get_cls_signature(&cls).methods.get_method(&method).overriding {
+            Some((cls, method)) => self.get_top_method(cls, method),
+            None => (cls, method),
+        }
+    }
 }
 
 pub trait FindMatchingMethodCtx<'src>:
@@ -216,11 +229,14 @@ impl<'src, Ctx: StdlibCtx + ClassSignatureCtx + ClassMemberNamesCtx<'src>>
         let signature = self.get_cls_signature(&cls_id);
         let methods = &signature.methods;
 
-        let name_id = self
-            .get_member_names(&cls_id)
-            .methods
-            .get_by_name(name)
-            .ok_or(MethodError::UndefinedMethod { name: name_node.clone() })?;
+        let Some(name_id) = self.get_member_names(&cls_id).methods.get_by_name(name) else {
+            let parent = signature.parent;
+            if parent == LibClassId::Class.into() || parent == ClassId::Invalid {
+                return Err(MethodError::UndefinedMethod { name: name_node.clone() });
+            } else {
+                return self.find_matching_method(parent, name, param_types, name_node, args_node);
+            }
+        };
 
         methods
             .get(&name_id)
@@ -274,49 +290,60 @@ fn resolve_method_signature<'src>(
     let params = resolve_params_signature(names, &method_node.params, errors);
     let return_type =
         method_node.return_type.as_ref().map(|cls_name| names.get_class_with_err(cls_name, errors));
-    MethodSignature { params, return_type }
+    MethodSignature { params, return_type, overriding: None }
 }
 
-pub fn init_cls_signature_registry<'src>(
-    cls_names: &ClassNameRegistry<'src>,
+pub fn init_cls_signature_registry<
+    'src,
+    Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>,
+>(
+    ctx: &Ctx,
     defs: &ClassDefsRegistry<'src>,
     errors: &mut Vec<AnalysisError<'src>>,
 ) -> ClassSignatureRegistry {
     let signatures = defs
         .iter()
         .map(|(id, def)| {
-            let parent = def
+            let mut parent = def
                 .node
                 .parent_id
                 .as_ref()
-                .map(|cls_name| cls_names.get_class_with_err(cls_name, errors))
+                .map(|cls_name| ctx.cls_names().get_class_with_err(cls_name, errors))
                 .unwrap_or(ClassId::Lib(LibClassId::AnyRef));
+
+            if let ClassId::Lib(
+                LibClassId::Class
+                | LibClassId::AnyValue
+                | LibClassId::Integer
+                | LibClassId::Real
+                | LibClassId::Boolean
+                | LibClassId::Char,
+            ) = parent
+            {
+                errors.push(
+                    ClassError::InvalidInheritance { parent: def.node.parent_id.clone().unwrap() }
+                        .into(),
+                );
+                parent = ClassId::Invalid;
+            }
 
             let constructors = def
                 .constructors
                 .iter()
-                .map(|(id, cons)| (id, resolve_params_signature(cls_names, &cons.params, errors)))
-                .collect();
-
-            let methods = def
-                .methods
-                .iter()
-                .map(|(id, method_overloads)| {
-                    let signatures = method_overloads
-                        .iter()
-                        .map(|(overload_id, method)| {
-                            let signature = resolve_method_signature(cls_names, method, errors);
-                            (overload_id, signature)
-                        })
-                        .collect();
-
-                    (id, signatures)
+                .map(|(id, cons)| {
+                    (id, resolve_params_signature(ctx.cls_names(), &cons.params, errors))
                 })
                 .collect();
+
+            let methods = def.methods.map_method(|_method_id, method| {
+                resolve_method_signature(ctx.cls_names(), method, errors)
+            });
             (id, ClassSignature { id: id.into(), parent, constructors, methods })
         })
         .collect();
-    check_inheritance(signatures, defs, errors)
+    let signatures = check_inheritance(signatures, defs, errors);
+    check_main(&signatures, defs, ctx, errors);
+    resolve_overrides(signatures, defs, ctx, errors)
 }
 
 enum VisitStatus {
@@ -381,6 +408,150 @@ fn check_inheritance<'src>(
     })
 }
 
+struct WithSignatures<'a, 'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>> {
+    signatures: &'a ClassSignatureRegistry,
+    ctx: &'a Ctx,
+    phantom: PhantomData<&'src str>,
+}
+impl<'a, 'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>> ClassSignatureCtx
+    for WithSignatures<'a, 'src, Ctx>
+{
+    fn signatures(&self) -> &ClassSignatureRegistry {
+        self.signatures
+    }
+}
+impl<'a, 'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>> StdlibCtx
+    for WithSignatures<'a, 'src, Ctx>
+{
+    fn stdlib(&self) -> &ShipStdLib {
+        self.ctx.stdlib()
+    }
+}
+impl<'a, 'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>> ClassNamesCtx<'src>
+    for WithSignatures<'a, 'src, Ctx>
+{
+    fn cls_names(&self) -> &ClassNameRegistry<'src> {
+        self.ctx.cls_names()
+    }
+}
+impl<'a, 'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>>
+    ClassMemberNamesCtx<'src> for WithSignatures<'a, 'src, Ctx>
+{
+    fn member_names(&self) -> &ClassMemberNamesRegistry<'src> {
+        self.ctx.member_names()
+    }
+}
+
+fn check_main<'src, Ctx: ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>>(
+    signatures: &ClassSignatureRegistry,
+    defs: &ClassDefsRegistry<'src>,
+    ctx: &Ctx,
+    errors: &mut Vec<AnalysisError<'src>>,
+) {
+    let Some((main_cls_id, main_cls)) =
+        signatures.iter().find(|(id, _signature)| ctx.cls_names().get_name(id) == "Main")
+    else {
+        errors.push(ClassError::MissingMain.into());
+        return;
+    };
+    if main_cls.constructors.len() != 1 {
+        errors
+            .push(ClassError::InvalidMainCons { main: defs.get(&main_cls_id).node.clone() }.into());
+        return;
+    }
+
+    for (_cons_id, cons) in main_cls.constructors.iter() {
+        if cons.param_types.len() != 1 || cons.param_types[0] != LibClassId::Array.into() {
+            errors.push(
+                ClassError::InvalidMainCons { main: defs.get(&main_cls_id).node.clone() }.into(),
+            );
+        }
+    }
+}
+
+fn find_override<
+    'src,
+    Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src> + ClassSignatureCtx,
+>(
+    defs: &ClassDefsRegistry<'src>,
+    ctx: &Ctx,
+    cls_id: UserClassId,
+    signature: &ClassSignature,
+    method_id: MethodId,
+    method_signature: &MethodSignature,
+    errors: &mut Vec<AnalysisError<'src>>,
+) -> Option<(ClassId, MethodId)> {
+    let name = ctx.get_member_names(&cls_id.into()).methods.get_name(&method_id.0);
+    let mut parent = signature.parent;
+    while parent != ClassId::Invalid && parent != LibClassId::Class.into() {
+        let parent_signature = ctx.get_cls_signature(&parent);
+        let parent_methods = &parent_signature.methods;
+
+        for (parent_name_id, overloads) in parent_methods {
+            let parent_name = ctx.get_member_names(&parent).methods.get_name(&parent_name_id);
+            if name == parent_name {
+                for (parent_overload_id, overload) in overloads {
+                    if method_signature.params == overload.params {
+                        if method_signature.return_type == overload.return_type {
+                            return Some((parent, (parent_name_id, parent_overload_id).into()));
+                        } else {
+                            errors.push(
+                                ClassError::InvalidOverload {
+                                    method: defs
+                                        .get(&cls_id)
+                                        .methods
+                                        .get_method(&method_id)
+                                        .clone(),
+                                }
+                                .into(),
+                            );
+                            return None;
+                        }
+                    }
+                }
+            }
+        }
+        parent = parent_signature.parent;
+    }
+
+    None
+}
+
+fn resolve_overrides<'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>>(
+    signatures: ClassSignatureRegistry,
+    defs: &ClassDefsRegistry<'src>,
+    ctx: &Ctx,
+    errors: &mut Vec<AnalysisError<'src>>,
+) -> ClassSignatureRegistry {
+    let overrides = signatures
+        .iter()
+        .map(|(id, signature)| {
+            let method_overrides = signature.methods.map_method(|method_id, method| {
+                find_override(
+                    defs,
+                    &WithSignatures { signatures: &signatures, ctx, phantom: PhantomData },
+                    id,
+                    signature,
+                    method_id,
+                    method,
+                    errors,
+                )
+            });
+            (id, method_overrides)
+        })
+        .collect();
+
+    signatures.combine(overrides, |signature, overrides| ClassSignature {
+        methods: signature.methods.combine(overrides, |overloads, overrides| {
+            overloads.combine(overrides, |overload, overriding| MethodSignature {
+                overriding,
+                ..overload
+            })
+        }),
+        ..signature
+    })
+}
+
 #[derive(Debug, Clone)]
 pub struct CircularInheritance<'src> {
     chain: Vec<Rc<ShipClassDef<'src>>>,
@@ -396,6 +567,14 @@ pub enum ClassError<'src> {
     DuplicateConstructor { fst: Rc<ShipConsDef<'src>>, snd: Rc<ShipConsDef<'src>> },
     #[display("duplicate field")]
     DuplicateField { fst: Rc<ShipVarDef<'src>>, snd: Rc<ShipVarDef<'src>> },
+    #[display("invalid overload")]
+    InvalidOverload { method: Rc<ShipMethodDef<'src>> },
+    #[display("missing main")]
+    MissingMain,
+    #[display("invalid main cons")]
+    InvalidMainCons { main: Rc<ShipClassDef<'src>> },
+    #[display("invalid inheritance")]
+    InvalidInheritance { parent: Rc<ShipId<'src>> },
 }
 
 impl<'src> Renderable<'src> for ClassError<'src> {
@@ -437,6 +616,17 @@ impl<'src> Renderable<'src> for ClassError<'src> {
                 snd.start,
                 snd.src()
             ),
+            ClassError::InvalidOverload { method: _method } => {
+                "Method's return type does not match return type of the method its overriding"
+                    .to_string()
+            },
+            ClassError::MissingMain => "Program is missing a 'Main' class".to_string(),
+            ClassError::InvalidMainCons { main: _main } => {
+                "'Main' class should have a single constructor with an 'Array' argument".to_string()
+            },
+            ClassError::InvalidInheritance { parent } => {
+                format!("Cannot inherit '{}'", parent.src())
+            },
         }
     }
 }
@@ -450,6 +640,10 @@ impl<'src> WithParserLoc for ClassError<'src> {
             ClassError::DuplicateClassName { fst: _, snd } => snd.loc(),
             ClassError::DuplicateConstructor { fst: _, snd } => snd.loc(),
             ClassError::DuplicateField { fst: _, snd } => snd.loc(),
+            ClassError::InvalidOverload { method } => method.loc(),
+            ClassError::MissingMain => ParserLoc { begin: 0, end: 0 },
+            ClassError::InvalidMainCons { main } => main.class_id.loc(),
+            ClassError::InvalidInheritance { parent } => parent.loc(),
         }
     }
 }

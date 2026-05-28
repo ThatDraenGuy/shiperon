@@ -51,6 +51,8 @@ use crate::ShipFeature;
     kRETURN     "return"
     kAS         "as"
     kSUPER      "super"
+    kTRUE       "true"
+    kFALSE      "false"
 
 %token
     tIDENTIFIER "identifier"
@@ -78,7 +80,7 @@ use crate::ShipFeature;
     param_id type_id expr stmt member_access method_call class_cast
     assignable_expr nonassignable_expr callable_expr noncallable_expr non_expr_stmt assign_stmt while_stmt if_stmt if_condition return_stmt
     args maybe_args_array args_array primary primitive
-    int float string char super this general_id
+    int float string char bool super this general_id
     generated
 
 %%
@@ -359,6 +361,8 @@ use crate::ShipFeature;
             $$ = Value::new_primary(self.src(), ShipPrimaryAll::String($<ShipString>1));
         } | char {
             $$ = Value::new_primary(self.src(), ShipPrimaryAll::Char($<ShipChar>1));
+        } | bool {
+            $$ = Value::new_primary(self.src(), ShipPrimaryAll::Bool($<ShipBool>1));
         }
 
     primary:
@@ -482,6 +486,13 @@ use crate::ShipFeature;
         tCHAR {
             self.check_feature(*@1, ShipFeature::String);
             $$ = Value::new_char(self.src(), $<Token>1);
+        }
+
+    bool:
+        kTRUE {
+            $$ = Value::new_bool(self.src(), $<Token>1);
+        } | kFALSE {
+            $$ = Value::new_bool(self.src(), $<Token>1);
         }
 
     this:

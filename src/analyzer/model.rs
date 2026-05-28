@@ -63,6 +63,14 @@ impl ClassModel {
     }
 }
 pub type ClassModelRegistry = ClassRegistry<ClassModel>;
+pub trait ClassModelCtx {
+    fn cls_models(&self) -> &ClassModelRegistry;
+}
+impl ClassModelCtx for ClassModelRegistry {
+    fn cls_models(&self) -> &ClassModelRegistry {
+        self
+    }
+}
 
 impl ClassModelRegistry {
     pub fn new<'a, 'src>(
@@ -81,30 +89,9 @@ impl ClassModelRegistry {
                     })
                     .collect();
 
-                let method_bodies = def
-                    .methods
-                    .iter()
-                    .map(|(method_name_id, methods)| {
-                        (
-                            method_name_id,
-                            methods
-                                .iter()
-                                .map(|(method_overload_id, method_def)| {
-                                    (
-                                        method_overload_id,
-                                        MethodBody::resolve(
-                                            &ctx,
-                                            cls_id,
-                                            (method_name_id, method_overload_id).into(),
-                                            method_def,
-                                            errors,
-                                        ),
-                                    )
-                                })
-                                .collect(),
-                        )
-                    })
-                    .collect();
+                let method_bodies = def.methods.map_method(|method_id, method_def| {
+                    MethodBody::resolve(&ctx, cls_id, method_id, method_def, errors)
+                });
                 (cls_id, (method_bodies, cons_bodies))
             })
             .collect();

@@ -1,5 +1,7 @@
 /target
 Cargo.lock
+*.ll
+*.o
 
 #IDEs
 .vscode

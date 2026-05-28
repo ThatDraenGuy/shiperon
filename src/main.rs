@@ -1,10 +1,7 @@
-use std::{error::Error, fs::read_to_string};
+use std::{error::Error, fs::read_to_string, path::Path};
 
-use clap::{Parser, ValueEnum};
-use ron::ser::PrettyConfig;
-use shiperon::{
-    CompilerConfig, Lexer, analyzer::Analyzer, config::FeatureFlags, diagnostics::Renderable,
-};
+use clap::Parser;
+use shiperon::{CompilerConfig, config::FeatureFlags};
 
 /// The one and only Shiperon Compiler
 #[derive(Parser, Debug)]
@@ -18,23 +15,6 @@ struct Args {
     /// Debug compiler option
     #[arg(short, long)]
     debug: bool,
-    /// Shiperon feature to enable
-    #[arg(short, long)]
-    feature: Vec<Feature>,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-enum Feature {
-    /// Class cast expressions
-    Cast,
-    /// IO operations
-    Io,
-    /// String and Char support
-    String,
-    /// `super` keyword
-    SuperKw,
-    /// All features
-    All,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -42,19 +22,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let config = CompilerConfig {
         debug: args.debug,
-        features: FeatureFlags {
-            class_casting: args.feature.iter().any(|f| *f == Feature::Cast || *f == Feature::All),
-            io: args.feature.iter().any(|f| *f == Feature::Io || *f == Feature::All),
-            string: args.feature.iter().any(|f| *f == Feature::String || *f == Feature::All),
-            super_kw: args.feature.iter().any(|f| *f == Feature::SuperKw || *f == Feature::All),
-        },
+        features: FeatureFlags { class_casting: true, io: false, string: true, super_kw: false },
         internal: false,
     };
 
     println!("{config:?}");
 
     let input = read_to_string(&args.src)?;
-    shiperon::process(&input, config);
+    shiperon::process(&input, Path::new(&args.out.unwrap()), config)?;
 
     Ok(())
 }

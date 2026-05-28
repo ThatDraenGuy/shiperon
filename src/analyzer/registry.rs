@@ -108,6 +108,11 @@ impl<Id: RegistryId, V> Registry<Id, V> {
     }
 
     #[inline]
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    #[inline]
     pub fn get(&self, id: &Id) -> &V {
         self.inner[id.as_index()].as_ref().unwrap()
     }
@@ -117,6 +122,9 @@ impl<Id: RegistryId, V> Registry<Id, V> {
         self.into_iter()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.inner.iter().all(Option::is_none)
+    }
     #[inline]
     pub fn transform<V2, F>(self, mut f: F) -> Registry<Id, V2>
     where
@@ -135,16 +143,7 @@ impl<Id: RegistryId, V> Registry<Id, V> {
     where
         F: Fn(V, V2) -> V3,
     {
-        let t = self
-            .inner
-            .into_iter()
-            .zip(other.inner)
-            .map(|(v, v2)| match (v, v2) {
-                (Some(a), Some(b)) => Some(f(a, b)),
-                _ => None,
-            })
-            .collect();
-        Registry { inner: t, phantom: PhantomData }
+        self.into_iter().zip(other).map(|((id, v), (_id, v2))| (id, f(v, v2))).collect()
     }
 }
 impl<Id: RegistryId, V1, V2> Registry<Id, (V1, V2)> {
@@ -454,7 +453,7 @@ mod method {
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct MethodId(MethodNameId, MethodOverloadId);
+    pub struct MethodId(pub MethodNameId, pub MethodOverloadId);
     impl From<(MethodNameId, MethodOverloadId)> for MethodId {
         fn from(value: (MethodNameId, MethodOverloadId)) -> Self {
             Self(value.0, value.1)
@@ -471,6 +470,24 @@ mod method {
     impl<V> MethodRegistry<V> {
         pub fn get_method(&self, id: &MethodId) -> &V {
             self.get(&id.0).get(&id.1)
+        }
+        pub fn map_method<F, V2>(&self, mut f: F) -> MethodRegistry<V2>
+        where
+            F: FnMut(MethodId, &V) -> V2,
+        {
+            self.iter()
+                .map(|(name_id, overloads)| {
+                    (
+                        name_id,
+                        overloads
+                            .iter()
+                            .map(|(overload_id, method)| {
+                                (overload_id, f((name_id, overload_id).into(), method))
+                            })
+                            .collect(),
+                    )
+                })
+                .collect()
         }
     }
 }
@@ -501,6 +518,8 @@ mod constructor {
 pub use constructor::*;
 
 mod field {
+    use std::fmt::Display;
+
     use super::{
         HasProvider, InnerRegistryId, NameRegistry, NameRegistryBuilder, Registry, RegistryBuilder,
         SimpleIdProvider,
@@ -522,6 +541,11 @@ mod field {
     impl HasProvider for FieldId {
         type Provider = SimpleIdProvider<FieldId>;
     }
+    impl Display for FieldId {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_fmt(format_args!("Field{}_", self.0))
+        }
+    }
     pub type FieldNameRegistry<'key> = NameRegistry<'key, FieldId>;
     pub type FieldNameRegistryBuilder<'key, V> = NameRegistryBuilder<'key, FieldId, V>;
     pub type FieldRegistry<V> = Registry<FieldId, V>;
@@ -530,6 +554,8 @@ mod field {
 pub use field::*;
 
 mod variable {
+    use std::fmt::Display;
+
     use super::{
         HasProvider, InnerRegistryId, NameRegistry, NameRegistryBuilder, Registry, RegistryBuilder,
         SimpleIdProvider,
@@ -550,6 +576,11 @@ mod variable {
     }
     impl HasProvider for VarId {
         type Provider = SimpleIdProvider<VarId>;
+    }
+    impl Display for VarId {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_fmt(format_args!("Var{}_", self.0))
+        }
     }
     pub type VarNameRegistry<'key> = NameRegistry<'key, VarId>;
     pub type VarNameRegistryBuilder<'key, V> = NameRegistryBuilder<'key, VarId, V>;

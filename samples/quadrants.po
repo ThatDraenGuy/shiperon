@@ -7,9 +7,9 @@ class Quadrant is
         this.yMul := yMul
     end
 
-    method Sign(num: Real): Boolean => num.GreaterOrEqual(0)
+    method Sign(num: Real): Boolean => num.GreaterEqual(0)
     method Abs(num: Real): Real is
-        if (Sign(num)) then
+        if Sign(num) then
             return num
         end
         return num.UnaryMinus()
@@ -19,14 +19,14 @@ class Quadrant is
     method Ry(r: Real): Real => r.Mult(Abs(yMul))
 
     method CheckSign(x: Real, y: Real): Boolean is
-        var xCheck := Sign(x).Equals(Sign(xMul)).Or(x.Equals(0))
-        var yCheck := Sign(y).Equals(Sign(yMul)).Or(y.Equals(0))
+        var xCheck : Sign(x).Equal(Sign(xMul)).Or(x.Equal(0))
+        var yCheck : Sign(y).Equal(Sign(yMul)).Or(y.Equal(0))
         return xCheck.And(yCheck)
     end
 
     method CalcHit(x: Real, y: Real, r: Real): Boolean => false
-    method CheckHit(x: Real, y: Real, r: Real): Boolean => is
-        if (CheckSign(x, y)) then
+    method CheckHit(x: Real, y: Real, r: Real): Boolean is
+        if CheckSign(x, y) then
             return CalcHit(x, y, r)
         end
         return false
@@ -40,7 +40,7 @@ class RectQuadrant extends Quadrant is
     end
 
     method CalcHit(x: Real, y: Real, r: Real): Boolean is
-        return Abs(x).LessOrEqual(Rx(r)).And(Abs(y).LessOrEqual(Ry(r)))
+        return Abs(x).LessEqual(Rx(r)).And(Abs(y).LessEqual(Ry(r)))
     end
 end
 
@@ -51,24 +51,25 @@ class CircleQuadrant extends Quadrant is
     end
 
     method CalcHit(x: Real, y: Real, r: Real): Boolean is
-        return x.Mult(x).Plus(y.Mult(y)).LessOrEqual(Rx(r).Mult(Rx(r)))
+        return x.Mult(x).Plus(y.Mult(y)).LessEqual(Rx(r).Mult(Rx(r)))
     end
 end
 
 class HitChecker is
-    this(x: Real, y: Real, r: Real): Boolean is
-        var quadrants : QuadrantArray(4)
-        quadrants.set(0, RectQuadrant(1.0, 2.0))
-        quadrants.set(1, RectQuadrant(-2.0, 0.5))
-        quadrants.set(2, CircleQuadrant(-1.0, -1.0))
-        quadrants.set(3, CircleQuadrant(1.0, -1.0))
+    var result: false
+    this(x: Real, y: Real, r: Real) is
+        var quadrants : Array(4)
+        quadrants.Set(0, RectQuadrant(1.0, 2.0))
+        quadrants.Set(1, RectQuadrant(-2.0, 0.5))
+        quadrants.Set(2, CircleQuadrant(-1.0, -1.0))
+        quadrants.Set(3, CircleQuadrant(1.0, -1.0))
 
-        var i := 0
+        var i : 0
         while i.Less(4) loop
-            if (quadrants.get(i).CheckHit(x, y, r)) then
-                return true
+            var quadrant : quadrants.Get(i) as Quadrant
+            if quadrant.CheckHit(x, y, r) then
+                result := true
             end
         end
-        return false
     end
 end

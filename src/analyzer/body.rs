@@ -10,7 +10,7 @@ use crate::{
         expr::{CallExpr, Expr, ExprModel},
         field::{ClassFieldsCtx, FieldModel, FindFieldCtx},
         registry::{
-            ClassId, ConsId, ConsRegistry, FieldId, LibClassId, MethodId, MethodRegistry,
+            ClassId, ConsId, ConsRegistry, FieldId, LibClassId, MethodId, MethodRegistry, Registry,
             UserClassId, VarId, VarNameRegistryBuilder,
         },
         signature::{ClassSignatureCtx, GetClsSignatureCtx},
@@ -48,8 +48,8 @@ pub enum BodyReturn<T> {
 }
 
 pub enum ScopeVar<'a> {
-    Var(VarId, &'a VarSignature),
-    Field(FieldId, &'a FieldModel),
+    Var(VarId, usize, &'a VarSignature),
+    Field(ClassId, FieldId, &'a FieldModel),
     Global,
 }
 
@@ -106,19 +106,20 @@ impl<'src> ScopeStack<'src> {
         ctx: &'a impl FindVarCtx<'src>,
         name: &Rc<ShipId<'src>>,
     ) -> Option<ScopeVar<'a>> {
-        for scope in &self.inner {
+        for (num, scope) in self.inner.iter().enumerate() {
             if let Some(id) = scope.vars.names().get_by_name(name.id) {
-                return Some(ScopeVar::Var(id, scope.vars.values().get(&id)));
+                return Some(ScopeVar::Var(id, num, scope.vars.values().get(&id)));
             }
         }
-        if let Ok((field_id, field_model)) = ctx.find_field(self.curr_cls.into(), name) {
-            return Some(ScopeVar::Field(field_id, field_model));
+        if let Ok((cls_id, field_id, field_model)) = ctx.find_field(self.curr_cls.into(), name) {
+            return Some(ScopeVar::Field(cls_id, field_id, field_model));
         }
         None
     }
 }
 
 pub struct Body {
+    pub vars: Registry<VarId, VarSignature>,
     pub stmts: Vec<Stmt>,
     pub return_expr: Option<BodyReturn<ExprModel>>,
 }
@@ -186,7 +187,6 @@ impl Body {
                             }
                             scopes.enter(ScopeType::While);
                             let body = Self::resolve(ctx, scopes, &while_node.body, errors);
-                            scopes.exit();
                             Stmt::While { condition, body }
                         },
                         ShipStmtAll::If(if_node) => {
@@ -202,11 +202,9 @@ impl Body {
                             }
                             scopes.enter(ScopeType::If);
                             let then_body = Self::resolve(ctx, scopes, &if_node.then_body, errors);
-                            scopes.exit();
                             let else_body = if_node.else_body.as_ref().map(|else_body_node| {
                                 scopes.enter(ScopeType::If);
                                 let res = Self::resolve(ctx, scopes, else_body_node, errors);
-                                scopes.exit();
                                 res
                             });
 
@@ -225,72 +223,68 @@ impl Body {
                             Stmt::Call(call_expr.1)
                         },
                         ShipStmtAll::Return(return_stmt) => {
-                            return Self {
-                                stmts,
-                                return_expr: match scopes.expected_return {
-                                    // parser ensures no statements after return in bodies
-                                    Some(return_type) => {
-                                        Some(match (return_type, &return_stmt.value) {
-                                            (None, None) => BodyReturn::Void,
-                                            (Some(expected_type), Some(return_expr)) => {
-                                                let expr = ExprModel::resolve(
-                                                    ctx,
-                                                    scopes,
-                                                    return_expr,
-                                                    errors,
-                                                );
-                                                if ctx
-                                                    .is_cls_subcls_of(expr.expr_type, expected_type)
-                                                    .0
-                                                {
-                                                    BodyReturn::Value(expr)
-                                                } else {
-                                                    errors.push(
-                                                        BodyError::TypeMismatch {
-                                                            expr: return_expr.clone(),
-                                                        }
-                                                        .into(),
-                                                    );
-                                                    BodyReturn::Value(ExprModel {
-                                                        expr_type: ClassId::Invalid,
-                                                        expr: expr.expr,
-                                                    })
-                                                }
-                                            },
-                                            (None, Some(_)) => {
+                            let return_expr = match scopes.expected_return {
+                                // parser ensures no statements after return in bodies
+                                Some(return_type) => {
+                                    Some(match (return_type, &return_stmt.value) {
+                                        (None, None) => BodyReturn::Void,
+                                        (Some(expected_type), Some(return_expr)) => {
+                                            let expr = ExprModel::resolve(
+                                                ctx,
+                                                scopes,
+                                                return_expr,
+                                                errors,
+                                            );
+                                            if ctx.is_cls_subcls_of(expr.expr_type, expected_type).0
+                                            {
+                                                BodyReturn::Value(expr)
+                                            } else {
                                                 errors.push(
-                                                    BodyError::ReturnValueInVoid {
-                                                        return_stmt: return_stmt.clone(),
-                                                    }
-                                                    .into(),
-                                                );
-                                                BodyReturn::Void
-                                            },
-                                            (Some(expected_type), None) => {
-                                                errors.push(
-                                                    BodyError::VoidReturnInValued {
-                                                        return_stmt: return_stmt.clone(),
+                                                    BodyError::TypeMismatch {
+                                                        expr: return_expr.clone(),
                                                     }
                                                     .into(),
                                                 );
                                                 BodyReturn::Value(ExprModel {
-                                                    expr_type: expected_type,
-                                                    expr: Expr::Invalid,
+                                                    expr_type: ClassId::Invalid,
+                                                    expr: expr.expr,
                                                 })
-                                            },
-                                        })
-                                    },
-                                    None => {
-                                        errors.push(
-                                            BodyError::ReturnInCons {
-                                                return_stmt: return_stmt.clone(),
                                             }
-                                            .into(),
-                                        );
-                                        None
-                                    },
+                                        },
+                                        (None, Some(_)) => {
+                                            errors.push(
+                                                BodyError::ReturnValueInVoid {
+                                                    return_stmt: return_stmt.clone(),
+                                                }
+                                                .into(),
+                                            );
+                                            BodyReturn::Void
+                                        },
+                                        (Some(expected_type), None) => {
+                                            errors.push(
+                                                BodyError::VoidReturnInValued {
+                                                    return_stmt: return_stmt.clone(),
+                                                }
+                                                .into(),
+                                            );
+                                            BodyReturn::Value(ExprModel {
+                                                expr_type: expected_type,
+                                                expr: Expr::Invalid,
+                                            })
+                                        },
+                                    })
+                                },
+                                None => {
+                                    errors.push(
+                                        BodyError::ReturnInCons {
+                                            return_stmt: return_stmt.clone(),
+                                        }
+                                        .into(),
+                                    );
+                                    None
                                 },
                             };
+                            return Self { vars: scopes.exit().vars.build().1, stmts, return_expr };
                         },
                     },
                 });
@@ -298,17 +292,19 @@ impl Body {
         }
 
         if has_unreachable {
-            errors.push(BodyError::UnreachableStmts { stmts: unreachable_stmts }.into());
-            Self { stmts, return_expr: Some(BodyReturn::Never) }
+            if !unreachable_stmts.is_empty() {
+                errors.push(BodyError::UnreachableStmts { stmts: unreachable_stmts }.into());
+            }
+            Self { vars: scopes.exit().vars.build().1, stmts, return_expr: Some(BodyReturn::Never) }
         } else {
-            Self { stmts, return_expr: None }
+            Self { vars: scopes.exit().vars.build().1, stmts, return_expr: None }
         }
     }
 }
 
 pub enum AssignTarget {
-    Var(VarId),
-    Field(ExprModel, FieldId),
+    Var(VarId, usize),
+    Field(ExprModel, ClassId, FieldId),
     Invalid,
 }
 
@@ -385,13 +381,17 @@ impl MethodBody {
         let body = match &def.body {
             Some(ShipMethodBodyAll::Expr(expr)) => {
                 let expr_model = ExprModel::resolve(ctx, &scopes, expr, errors);
-                Body { stmts: vec![], return_expr: Some(BodyReturn::Value(expr_model)) }
+                Body {
+                    vars: scopes.exit().vars.build().1,
+                    stmts: vec![],
+                    return_expr: Some(BodyReturn::Value(expr_model)),
+                }
             },
             Some(ShipMethodBodyAll::Body(body)) => Body::resolve(ctx, &mut scopes, body, errors),
             Some(ShipMethodBodyAll::Generated(_generated)) => unreachable!(),
             None => {
                 //skip for now - forward declaration not handled
-                Body { stmts: vec![], return_expr: None }
+                Body { vars: Registry::empty(), stmts: vec![], return_expr: None }
             },
         };
         Self { body }

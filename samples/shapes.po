@@ -8,7 +8,6 @@ class Square extends Shape is
     var side: Real(0.0)
 
     this(side: Real) is
-        super() // not in spec, under question
         this.side := side // differentiating between variables with same name
     end
 
@@ -20,7 +19,6 @@ class Rectangle extends Shape is
     var b: Real(0.0)
 
     this(a: Real, b: Real) is
-        super() // not in spec, under question
         this.a := a
         this.b := b
     end
@@ -28,8 +26,9 @@ class Rectangle extends Shape is
     method area(): Real => a.Mult(b)
 end
 
-// no clearly defined constructor
 class Math is
+    this() is
+    end
     var PI: 3.1415
 end
 
@@ -37,25 +36,37 @@ class Circle extends Shape is
     var r: Real(0.0)
 
     this(r: Real) is
-        super() // not in spec, under question
         this.r := r
     end
 
     method area(): Real => Math().PI.Mult(r).Mult(r)
 end
 
-class Program is
-    this(type: Integer, a: Real, b: Real) is
-        var shape : Shape()
-        if type.Equal(1) then
-            shape := Square(a)
+class Main is
+    var result: 0.0
+    this(args: Array) is
+        if args.Length().Equal(3) then
+            var typeStr: args.Get(0) as String
+            var aStr: args.Get(1) as String
+            var bStr: args.Get(2) as String
+            if aStr.IsReal().And(bStr.IsReal()) then
+                var a: aStr.ToReal()
+                var b: bStr.ToReal()
+
+                var shape : Shape()
+                if typeStr.Equal("Square") then
+                    shape := Square(a)
+                end
+                if typeStr.Equal("Rect") then
+                    shape := Rectangle(a, b)
+                end
+                if typeStr.Equal("Circle") then
+                    shape := Circle(a)
+                end
+                result := shape.area()
+            end
         end
-        if type.Equal(2) then
-            shape := Rectangle(a, b)
-        end
-        if type.Equal(3) then
-            shape := Circle(a)
-        end
-        return shape.area()
     end
+
+    method ToString(): String => result.ToString()
 end
