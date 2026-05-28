@@ -326,7 +326,8 @@ pub fn init_cls_signature_registry<
         })
         .collect();
     let signatures = check_inheritance(signatures, defs, errors);
-    resolve_overrides(signatures, ctx, errors)
+    check_main(&signatures, defs, ctx, errors);
+    resolve_overrides(signatures, defs, ctx, errors)
 }
 
 enum VisitStatus {
@@ -425,15 +426,44 @@ impl<'a, 'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>>
     }
 }
 
+fn check_main<'src, Ctx: ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>>(
+    signatures: &ClassSignatureRegistry,
+    defs: &ClassDefsRegistry<'src>,
+    ctx: &Ctx,
+    errors: &mut Vec<AnalysisError<'src>>,
+) {
+    let Some((main_cls_id, main_cls)) =
+        signatures.iter().find(|(id, _signature)| ctx.cls_names().get_name(id) == "Main")
+    else {
+        errors.push(ClassError::MissingMain.into());
+        return;
+    };
+    if main_cls.constructors.len() != 1 {
+        errors
+            .push(ClassError::InvalidMainCons { main: defs.get(&main_cls_id).node.clone() }.into());
+        return;
+    }
+
+    for (_cons_id, cons) in main_cls.constructors.iter() {
+        if cons.param_types.len() != 1 || cons.param_types[0] != LibClassId::Array.into() {
+            errors.push(
+                ClassError::InvalidMainCons { main: defs.get(&main_cls_id).node.clone() }.into(),
+            );
+        }
+    }
+}
+
 fn find_override<
     'src,
     Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src> + ClassSignatureCtx,
 >(
+    defs: &ClassDefsRegistry<'src>,
     ctx: &Ctx,
     cls_id: UserClassId,
     signature: &ClassSignature,
     method_id: MethodId,
     method_signature: &MethodSignature,
+    errors: &mut Vec<AnalysisError<'src>>,
 ) -> Option<(ClassId, MethodId)> {
     let name = ctx.get_member_names(&cls_id.into()).methods.get_name(&method_id.0);
     let mut parent = signature.parent;
@@ -446,8 +476,21 @@ fn find_override<
             if name == parent_name {
                 for (parent_overload_id, overload) in overloads {
                     if method_signature.params == overload.params {
-                        //TODO error on different return types
-                        return Some((parent, (parent_name_id, parent_overload_id).into()));
+                        if method_signature.return_type == overload.return_type {
+                            return Some((parent, (parent_name_id, parent_overload_id).into()));
+                        } else {
+                            errors.push(
+                                ClassError::InvalidOverload {
+                                    method: defs
+                                        .get(&cls_id)
+                                        .methods
+                                        .get_method(&method_id)
+                                        .clone(),
+                                }
+                                .into(),
+                            );
+                            return None;
+                        }
                     }
                 }
             }
@@ -460,6 +503,7 @@ fn find_override<
 
 fn resolve_overrides<'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNamesCtx<'src>>(
     signatures: ClassSignatureRegistry,
+    defs: &ClassDefsRegistry<'src>,
     ctx: &Ctx,
     errors: &mut Vec<AnalysisError<'src>>,
 ) -> ClassSignatureRegistry {
@@ -468,11 +512,13 @@ fn resolve_overrides<'src, Ctx: StdlibCtx + ClassMemberNamesCtx<'src> + ClassNam
         .map(|(id, signature)| {
             let method_overrides = signature.methods.map_method(|method_id, method| {
                 find_override(
+                    defs,
                     &WithSignatures { signatures: &signatures, ctx, phantom: PhantomData },
                     id,
                     signature,
                     method_id,
                     method,
+                    errors,
                 )
             });
             (id, method_overrides)
@@ -505,6 +551,12 @@ pub enum ClassError<'src> {
     DuplicateConstructor { fst: Rc<ShipConsDef<'src>>, snd: Rc<ShipConsDef<'src>> },
     #[display("duplicate field")]
     DuplicateField { fst: Rc<ShipVarDef<'src>>, snd: Rc<ShipVarDef<'src>> },
+    #[display("invalid overload")]
+    InvalidOverload { method: Rc<ShipMethodDef<'src>> },
+    #[display("missing main")]
+    MissingMain,
+    #[display("invalid main cons")]
+    InvalidMainCons { main: Rc<ShipClassDef<'src>> },
 }
 
 impl<'src> Renderable<'src> for ClassError<'src> {
@@ -546,6 +598,14 @@ impl<'src> Renderable<'src> for ClassError<'src> {
                 snd.start,
                 snd.src()
             ),
+            ClassError::InvalidOverload { method: _method } => {
+                "Method's return type does not match return type of the method its overriding"
+                    .to_string()
+            },
+            ClassError::MissingMain => "Program is missing a 'Main' class".to_string(),
+            ClassError::InvalidMainCons { main } => {
+                "'Main' class should have a single constructor with an 'Array' argument".to_string()
+            },
         }
     }
 }
@@ -559,6 +619,9 @@ impl<'src> WithParserLoc for ClassError<'src> {
             ClassError::DuplicateClassName { fst: _, snd } => snd.loc(),
             ClassError::DuplicateConstructor { fst: _, snd } => snd.loc(),
             ClassError::DuplicateField { fst: _, snd } => snd.loc(),
+            ClassError::InvalidOverload { method } => method.loc(),
+            ClassError::MissingMain => ParserLoc { begin: 0, end: 0 },
+            ClassError::InvalidMainCons { main } => main.class_id.loc(),
         }
     }
 }
