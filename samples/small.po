@@ -18,5 +18,5 @@ class Main is
         end
     end
 
-    method ToString() => "Main is res=".Concat(res.ToString()).Concat(" end")
+    method ToString(): String => "Main is res=".Concat(res.ToString()).Concat(" end")
 end

@@ -644,7 +644,7 @@ pub fn compile<'src>(
         .status()
         .expect("Failed to compile shiplib");
 
-    let user_obj = tmp_dir.path().join(output.with_extension("o"));
+    let user_obj = tmp_dir.path().join(output.with_extension("o").file_name().unwrap());
     machine.write_to_file(&codegen.llvm.module, targets::FileType::Object, &user_obj)?;
 
     Command::new("clang")

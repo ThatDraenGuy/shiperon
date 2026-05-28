@@ -304,12 +304,28 @@ pub fn init_cls_signature_registry<
     let signatures = defs
         .iter()
         .map(|(id, def)| {
-            let parent = def
+            let mut parent = def
                 .node
                 .parent_id
                 .as_ref()
                 .map(|cls_name| ctx.cls_names().get_class_with_err(cls_name, errors))
                 .unwrap_or(ClassId::Lib(LibClassId::AnyRef));
+
+            if let ClassId::Lib(
+                LibClassId::Class
+                | LibClassId::AnyValue
+                | LibClassId::Integer
+                | LibClassId::Real
+                | LibClassId::Boolean
+                | LibClassId::Char,
+            ) = parent
+            {
+                errors.push(
+                    ClassError::InvalidInheritance { parent: def.node.parent_id.clone().unwrap() }
+                        .into(),
+                );
+                parent = ClassId::Invalid;
+            }
 
             let constructors = def
                 .constructors
@@ -557,6 +573,8 @@ pub enum ClassError<'src> {
     MissingMain,
     #[display("invalid main cons")]
     InvalidMainCons { main: Rc<ShipClassDef<'src>> },
+    #[display("invalid inheritance")]
+    InvalidInheritance { parent: Rc<ShipId<'src>> },
 }
 
 impl<'src> Renderable<'src> for ClassError<'src> {
@@ -603,8 +621,11 @@ impl<'src> Renderable<'src> for ClassError<'src> {
                     .to_string()
             },
             ClassError::MissingMain => "Program is missing a 'Main' class".to_string(),
-            ClassError::InvalidMainCons { main } => {
+            ClassError::InvalidMainCons { main: _main } => {
                 "'Main' class should have a single constructor with an 'Array' argument".to_string()
+            },
+            ClassError::InvalidInheritance { parent } => {
+                format!("Cannot inherit '{}'", parent.src())
             },
         }
     }
@@ -622,6 +643,7 @@ impl<'src> WithParserLoc for ClassError<'src> {
             ClassError::InvalidOverload { method } => method.loc(),
             ClassError::MissingMain => ParserLoc { begin: 0, end: 0 },
             ClassError::InvalidMainCons { main } => main.class_id.loc(),
+            ClassError::InvalidInheritance { parent } => parent.loc(),
         }
     }
 }
